@@ -11,7 +11,11 @@ enum Advertising_Type {
     XIAOMI = 2,
     BTHOME = 3,
 };
-
+enum Connection_mode {
+    ADVERTISING = 0,
+    NOTIFICATION = 1,
+    CONNECTION = 2,
+};
 enum Smiley {
     SMILEY_OFF = 0,
     SMILEY_HAPPY = 1,
@@ -152,8 +156,7 @@ private:
     uint16_t battery_mv;
     uint8_t battery_level;
     ATC_MiThermometer_Settings settings;
-    bool notify;
-    bool advertising;
+    Connection_mode connection_mode;
 
     // Callback-uri
     void notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length,
@@ -178,7 +181,7 @@ private:
     void parseAdvertisingDataBTHOME(uint8_t *data, size_t length);
 
 public:
-    ATC_MiThermometer(const char *address, bool advertising = true, bool notify = false);
+    ATC_MiThermometer(const char *address, Connection_mode connection_mode = ADVERTISING);
 
     void init();
 
@@ -245,6 +248,8 @@ public:
     char *getAddress();
 
     bool get_read_settings();
+
+    uint16_t getBatteryVoltage();
 };
 
 #endif // ATC_MI_THERMOMETER_NIMBLE_H

@@ -1,35 +1,13 @@
 #include "ATC_MiThermometer.h"
+#include <cmath>
 
-ATC_MiThermometer::ATC_MiThermometer(const char *address, bool advertising, bool notify) : address(address),
-                                                                                           notify(notify),
-                                                                                           advertising(advertising),
-                                                                                           pClient(nullptr),
-                                                                                           environmentService(nullptr),
-                                                                                           batteryService(nullptr),
-                                                                                           commandService(nullptr),
-                                                                                           temperatureCharacteristic(
-                                                                                                   nullptr),
-                                                                                           temperaturePreciseCharacteristic(
-                                                                                                   nullptr),
-                                                                                           humidityCharacteristic(
-                                                                                                   nullptr),
-                                                                                           batteryCharacteristic(
-                                                                                                   nullptr),
-                                                                                           commandCharacteristic(
-                                                                                                   nullptr),
-                                                                                           received_settings(false),
-                                                                                           read_settings(false),
-                                                                                           started_notify_temp(false),
-                                                                                           started_notify_temp_precise(
-                                                                                                   false),
-                                                                                           started_notify_humidity(
-                                                                                                   false),
-                                                                                           started_notify_battery(
-                                                                                                   false),
-                                                                                           temperature(0),
-                                                                                           temperature_precise(0),
-                                                                                           humidity(0), battery_mv(0),
-                                                                                           battery_level(0) {
+ATC_MiThermometer::ATC_MiThermometer(const char *address, Connection_mode connection_mode)
+        : address(address), pClient(nullptr), environmentService(nullptr), connection_mode(connection_mode),
+          batteryService(nullptr), commandService(nullptr), temperatureCharacteristic(nullptr),
+          temperaturePreciseCharacteristic(nullptr), humidityCharacteristic(nullptr), batteryCharacteristic(nullptr),
+          commandCharacteristic(nullptr), received_settings(false), read_settings(false), started_notify_temp(false),
+          started_notify_temp_precise(false), started_notify_humidity(false), started_notify_battery(false),
+          temperature(0), temperature_precise(0), humidity(0), battery_mv(0), battery_level(0) {
 }
 
 void ATC_MiThermometer::connect() {
@@ -403,10 +381,23 @@ void ATC_MiThermometer::begin_notify() {
 }
 
 float ATC_MiThermometer::getTemperature() {
-    if (!started_notify_temp) {
+    if (connection_mode == ADVERTISING) {
+        if (getAdvertisingType() == ATC1441) {
+            return temperature;
+        } else if (getAdvertisingType() == PVVX) {
+            return round(temperature_precise * 10.0f) / 10.0f;
+        } else if (getAdvertisingType() == BTHOME) {
+            return round(temperature_precise * 10.0f) / 10.0f;
+        }
+    } else if (connection_mode == NOTIFY) {
+        if (!started_notify_temp) {
+            readTemperature();
+        }
+        return temperature;
+    } else if (connection_mode == READ) {
         readTemperature();
+        return temperature;
     }
-    return temperature;
 }
 
 void ATC_MiThermometer::readTemperature() {
@@ -427,10 +418,23 @@ void ATC_MiThermometer::readTemperature() {
 }
 
 float ATC_MiThermometer::getTemperaturePrecise() {
-    if (!started_notify_temp_precise) {
+    if (connection_mode == ADVERTISING) {
+        if (getAdvertisingType() == ATC1441) {
+            return temperature;
+        } else if (getAdvertisingType() == PVVX) {
+            return temperature_precise;
+        } else if (getAdvertisingType() == BTHOME) {
+            return temperature_precise;
+        }
+    } else if (connection_mode == NOTIFY) {
+        if (!started_notify_temp_precise) {
+            readTemperaturePrecise();
+        }
+        return temperature_precise;
+    } else if (connection_mode == READ) {
         readTemperaturePrecise();
+        return temperature_precise;
     }
-    return temperature_precise;
 }
 
 void ATC_MiThermometer::readTemperaturePrecise() {
@@ -451,10 +455,23 @@ void ATC_MiThermometer::readTemperaturePrecise() {
 }
 
 float ATC_MiThermometer::getHumidity() {
-    if (!started_notify_humidity) {
+    if (connection_mode == ADVERTISING) {
+        if (getAdvertisingType() == ATC1441) {
+            return humidity;
+        } else if (getAdvertisingType() == PVVX) {
+            return humidity;
+        } else if (getAdvertisingType() == BTHOME) {
+            return humidity;
+        }
+    } else if (connection_mode == NOTIFY) {
+        if (!started_notify_humidity) {
+            readHumidity();
+        }
+        return humidity;
+    } else if (connection_mode == READ) {
         readHumidity();
+        return humidity;
     }
-    return humidity;
 }
 
 void ATC_MiThermometer::readHumidity() {
@@ -475,10 +492,23 @@ void ATC_MiThermometer::readHumidity() {
 }
 
 uint8_t ATC_MiThermometer::getBatteryLevel() {
-    if (!started_notify_battery) {
+    if (connection_mode == ADVERTISING) {
+        if (getAdvertisingType() == ATC1441) {
+            return battery_level;
+        } else if (getAdvertisingType() == PVVX) {
+            return battery_level;
+        } else if (getAdvertisingType() == BTHOME) {
+            return battery_level;
+        }
+    } else if (connection_mode == NOTIFY) {
+        if (!started_notify_battery) {
+            readBatteryLevel();
+        }
+        return battery_level;
+    } else if (connection_mode == READ) {
         readBatteryLevel();
+        return battery_level;
     }
-    return battery_level;
 }
 
 void ATC_MiThermometer::readBatteryLevel() {
@@ -511,7 +541,7 @@ char *ATC_MiThermometer::getAddress() {
 void ATC_MiThermometer::parseAdvertisingData(uint8_t *data, size_t length) {
     if (!read_settings) {
         readSettings();
-        if (advertising) {
+        if (connection_mode == ADVERTISING) {
             disconnect();
         }
         return;
@@ -533,7 +563,7 @@ void ATC_MiThermometer::parseAdvertisingDataATC1441(uint8_t *data, size_t length
         return;
     }
     int16_t temperatureRaw = (data[10] << 8) | data[11];
-    temperature_precise = temperatureRaw * 0.1;
+    temperature = temperatureRaw * 0.1;
     humidity = data[12];
     battery_level = data[13];
     battery_mv = (data[14] << 8) | data[15];
@@ -622,8 +652,7 @@ void ATC_MiThermometer::parseAdvertisingDataBTHOME(uint8_t *data, size_t length)
                             break;
                         }
                         uint16_t temperatureRaw = ad_data[dataIndex] | (ad_data[dataIndex + 1] << 8);
-                        float temperature = temperatureRaw * 0.01;
-                        this->temperature = temperature;
+                        temperature_precise = temperatureRaw * 0.01;
                         dataIndex += 2;
                         break;
                     }
@@ -690,17 +719,41 @@ void ATC_MiThermometer::init() {
         Serial.println("Failed to read settings after multiple attempts");
         return;
     }
-    if (advertising) {
+    if (connection_mode == ADVERTISING) {
         disconnect();
         return;
-    }
-    if (notify) {
+    } else if (connection_mode == NOTIFY) {
         connect_to_all_services();
         connect_to_all_characteristics();
         begin_notify();
+    } else if (connection_mode == READ) {
+        readTemperature();
+        readTemperaturePrecise();
+        readHumidity();
+        readBatteryLevel();
     }
 }
 
 bool ATC_MiThermometer::get_read_settings() {
     return read_settings;
+}
+
+uint16_t ATC_MiThermometer::getBatteryVoltage() {
+    if (connection_mode == ADVERTISING) {
+        if (getAdvertisingType() == ATC1441) {
+            return battery_mv;
+        } else if (getAdvertisingType() == PVVX) {
+            return battery_mv;
+        } else if (getAdvertisingType() == BTHOME) {
+            return battery_mv;
+        }
+    } else if (connection_mode == NOTIFY) {
+        if (!started_notify_battery) {
+            readBatteryLevel();
+        }
+        return 2000 + (battery_level * (3000 - 2000) / 100);
+    } else if (connection_mode == READ) {
+        readBatteryLevel();
+        return 2000 + (battery_level * (3000 - 2000) / 100);
+    }
 }
