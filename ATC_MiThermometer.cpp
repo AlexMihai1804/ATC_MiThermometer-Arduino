@@ -756,4 +756,5 @@ uint16_t ATC_MiThermometer::getBatteryVoltage() {
         readBatteryLevel();
         return 2000 + (battery_level * (3000 - 2000) / 100);
     }
+
 }
