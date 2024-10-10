@@ -398,6 +398,7 @@ float ATC_MiThermometer::getTemperature() {
         readTemperature();
         return temperature;
     }
+    return 0;
 }
 
 void ATC_MiThermometer::readTemperature() {
@@ -435,6 +436,7 @@ float ATC_MiThermometer::getTemperaturePrecise() {
         readTemperaturePrecise();
         return temperature_precise;
     }
+    return 0;
 }
 
 void ATC_MiThermometer::readTemperaturePrecise() {
@@ -520,7 +522,7 @@ void ATC_MiThermometer::readBatteryLevel() {
         }
     }
     std::string value = batteryCharacteristic->readValue();
-    if (value.length() >= 1) {
+    if (!value.empty()) {
         battery_level = (uint8_t) value[0];
     } else {
         Serial.println("Failed to read battery level, insufficient data");
@@ -663,7 +665,6 @@ void ATC_MiThermometer::parseAdvertisingDataBTHOME(uint8_t *data, size_t length)
                         }
                         uint16_t humidityRaw = ad_data[dataIndex] | (ad_data[dataIndex + 1] << 8);
                         humidity = humidityRaw * 0.01;
-                        this->humidity = humidity;
                         dataIndex += 2;
                         break;
                     }
@@ -734,7 +735,7 @@ void ATC_MiThermometer::init() {
     }
 }
 
-bool ATC_MiThermometer::get_read_settings() {
+bool ATC_MiThermometer::get_read_settings() const {
     return read_settings;
 }
 
@@ -756,4 +757,5 @@ uint16_t ATC_MiThermometer::getBatteryVoltage() {
         readBatteryLevel();
         return 2000 + (battery_level * (3000 - 2000) / 100);
     }
+    return 0;
 }

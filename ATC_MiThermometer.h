@@ -155,7 +155,7 @@ private:
     float humidity;
     uint16_t battery_mv;
     uint8_t battery_level;
-    ATC_MiThermometer_Settings settings;
+    ATC_MiThermometer_Settings settings{};
     Connection_mode connection_mode;
 
     // Callback-uri
@@ -247,7 +247,7 @@ public:
 
     char *getAddress();
 
-    bool get_read_settings();
+    bool get_read_settings() const;
 
     uint16_t getBatteryVoltage();
 };
