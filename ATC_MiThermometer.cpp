@@ -759,3 +759,164 @@ uint16_t ATC_MiThermometer::getBatteryVoltage() {
     }
     return 0;
 }
+
+RF_TX_Power ATC_MiThermometer::getRfTxPower() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.rfTxPower;
+}
+
+bool ATC_MiThermometer::getLowPowerMeasures() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.lp_measures;
+}
+
+bool ATC_MiThermometer::getTransmitMeasures() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.tx_measures;
+}
+
+bool ATC_MiThermometer::getShowBattery() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.show_battery;
+}
+
+bool ATC_MiThermometer::getTempFOrC() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.temp_F_or_C;
+}
+
+bool ATC_MiThermometer::getBlinkingTimeSmile() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.blinking_time_smile;
+}
+
+bool ATC_MiThermometer::getComfortSmiley() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.comfort_smiley;
+}
+
+bool ATC_MiThermometer::getAdvCrypto() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.adv_crypto;
+}
+
+bool ATC_MiThermometer::getAdvFlags() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.adv_flags;
+}
+
+Smiley ATC_MiThermometer::getSmiley() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.smiley;
+}
+
+bool ATC_MiThermometer::getBT5PHY() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.bt5phy;
+}
+
+bool ATC_MiThermometer::getLongRange() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.long_range;
+}
+
+bool ATC_MiThermometer::getScreenOff() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.screen_off;
+}
+
+float ATC_MiThermometer::getTempOffset() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.temp_offset;
+}
+
+float ATC_MiThermometer::getHumidityOffset() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.humidity_offset;
+}
+
+int8_t ATC_MiThermometer::getTempOffsetCal() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.temp_offset_cal;
+}
+
+int8_t ATC_MiThermometer::getHumidityOffsetCal() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.humidity_offset_cal;
+}
+
+uint8_t ATC_MiThermometer::getAdvertisingInterval() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.advertising_interval;
+}
+
+uint8_t ATC_MiThermometer::getMeasureInterval() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.measure_interval;
+}
+
+uint8_t ATC_MiThermometer::getConnectLatency() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.connect_latency;
+}
+
+uint8_t ATC_MiThermometer::getLcdUpdateInterval() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.lcd_update_interval;
+}
+
+HW_VERSION_ID ATC_MiThermometer::getHwVersion() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.hw_version;
+}
+
+uint8_t ATC_MiThermometer::getAveragingMeasurements() {
+    if (!read_settings) {
+        readSettings();
+    }
+    return settings.averaging_measurements;
+}

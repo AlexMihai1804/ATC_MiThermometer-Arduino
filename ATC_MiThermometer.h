@@ -125,6 +125,53 @@ public:
     bool get_read_settings() const;
 
     uint16_t getBatteryVoltage();
+
+    RF_TX_Power getRfTxPower();
+
+    bool getLowPowerMeasures();
+
+    bool getTransmitMeasures();
+
+    bool getShowBattery();
+
+    bool getTempFOrC();
+
+    bool getBlinkingTimeSmile();
+
+    bool getComfortSmiley();
+
+    bool getAdvCrypto();
+
+    bool getAdvFlags();
+
+    Smiley getSmiley();
+
+    bool getBT5PHY();
+
+    bool getLongRange();
+
+    bool getScreenOff();
+
+    float getTempOffset();
+
+    float getHumidityOffset();
+
+    int8_t getTempOffsetCal();
+
+    int8_t getHumidityOffsetCal();
+
+    uint8_t getAdvertisingInterval();
+
+    uint8_t getMeasureInterval();
+
+    uint8_t getConnectLatency();
+
+    uint8_t getLcdUpdateInterval();
+
+    HW_VERSION_ID getHwVersion();
+
+    uint8_t getAveragingMeasurements();
+
 };
 
 #endif // ATC_MI_THERMOMETER_NIMBLE_H
