@@ -879,28 +879,28 @@ int8_t ATC_MiThermometer::getHumidityOffsetCal() {
     return settings.humidity_offset_cal;
 }
 
-uint8_t ATC_MiThermometer::getAdvertisingInterval() {
+uint8_t ATC_MiThermometer::getAdvertisingIntervalSteps() {
     if (!read_settings) {
         readSettings();
     }
     return settings.advertising_interval;
 }
 
-uint8_t ATC_MiThermometer::getMeasureInterval() {
+uint8_t ATC_MiThermometer::getMeasureIntervalSteps() {
     if (!read_settings) {
         readSettings();
     }
     return settings.measure_interval;
 }
 
-uint8_t ATC_MiThermometer::getConnectLatency() {
+uint8_t ATC_MiThermometer::getConnectLatencySteps() {
     if (!read_settings) {
         readSettings();
     }
     return settings.connect_latency;
 }
 
-uint8_t ATC_MiThermometer::getLcdUpdateInterval() {
+uint8_t ATC_MiThermometer::getLcdUpdateIntervalSteps() {
     if (!read_settings) {
         readSettings();
     }
@@ -914,9 +914,144 @@ HW_VERSION_ID ATC_MiThermometer::getHwVersion() {
     return settings.hw_version;
 }
 
-uint8_t ATC_MiThermometer::getAveragingMeasurements() {
+uint8_t ATC_MiThermometer::getAveragingMeasurementsSteps() {
     if (!read_settings) {
         readSettings();
     }
     return settings.averaging_measurements;
+}
+
+float ATC_MiThermometer::getRfTxPowerdBm() {
+    switch (getRfTxPower()) {
+        case RF_TX_Power::dBm_3_01:
+            return 3.01;
+        case RF_TX_Power::dBm_2_81:
+            return 2.81;
+        case RF_TX_Power::dBm_2_61:
+            return 2.61;
+        case RF_TX_Power::dBm_2_39:
+            return 2.39;
+        case RF_TX_Power::dBm_1_99:
+            return 1.99;
+        case RF_TX_Power::dBm_1_73:
+            return 1.73;
+        case RF_TX_Power::dBm_1_45:
+            return 1.45;
+        case RF_TX_Power::dBm_1_17:
+            return 1.17;
+        case RF_TX_Power::dBm_0_90:
+            return 0.90;
+        case RF_TX_Power::dBm_0_58:
+            return 0.58;
+        case RF_TX_Power::dBm_0_04:
+            return 0.04;
+        case RF_TX_Power::dBm_n0_14:
+            return -0.14;
+        case RF_TX_Power::dBm_n0_97:
+            return -0.97;
+        case RF_TX_Power::dBm_n1_42:
+            return -1.42;
+        case RF_TX_Power::dBm_n1_89:
+            return -1.89;
+        case RF_TX_Power::dBm_n2_48:
+            return -2.48;
+        case RF_TX_Power::dBm_n3_03:
+            return -3.03;
+        case RF_TX_Power::dBm_n3_61:
+            return -3.61;
+        case RF_TX_Power::dBm_n4_26:
+            return -4.26;
+        case RF_TX_Power::dBm_n5_03:
+            return -5.03;
+        case RF_TX_Power::dBm_n5_81:
+            return -5.81;
+        case RF_TX_Power::dBm_n6_67:
+            return -6.67;
+        case RF_TX_Power::dBm_n7_65:
+            return -7.65;
+        case RF_TX_Power::dBm_n8_65:
+            return -8.65;
+        case RF_TX_Power::dBm_n9_89:
+            return -9.89;
+        case RF_TX_Power::dBm_n11_4:
+            return -11.4;
+        case RF_TX_Power::dBm_n13_29:
+            return -13.29;
+        case RF_TX_Power::dBm_n15_88:
+            return -15.88;
+        case RF_TX_Power::dBm_n19_27:
+            return -19.27;
+        case RF_TX_Power::dBm_n25_18:
+            return -25.18;
+        case RF_TX_Power::dBm_n30:
+            return -30;
+        case RF_TX_Power::dBm_n50:
+            return -50;
+        case RF_TX_Power::dBm_10_46:
+            return 10.46;
+        case RF_TX_Power::dBm_10_29:
+            return 10.29;
+        case RF_TX_Power::dBm_10_01:
+            return 10.01;
+        case RF_TX_Power::dBm_9_81:
+            return 9.81;
+        case RF_TX_Power::dBm_9_48:
+            return 9.48;
+        case RF_TX_Power::dBm_9_24:
+            return 9.24;
+        case RF_TX_Power::dBm_8_97:
+            return 8.97;
+        case RF_TX_Power::dBm_8_73:
+            return 8.73;
+        case RF_TX_Power::dBm_8_44:
+            return 8.44;
+        case RF_TX_Power::dBm_8_13:
+            return 8.13;
+        case RF_TX_Power::dBm_7_79:
+            return 7.79;
+        case RF_TX_Power::dBm_7_41:
+            return 7.41;
+        case RF_TX_Power::dBm_7_02:
+            return 7.02;
+        case RF_TX_Power::dBm_6_60:
+            return 6.60;
+        case RF_TX_Power::dBm_6_14:
+            return 6.14;
+        case RF_TX_Power::dBm_5_65:
+            return 5.65;
+        case RF_TX_Power::dBm_5_13:
+            return 5.13;
+        case RF_TX_Power::dBm_4_57:
+            return 4.57;
+        case RF_TX_Power::dBm_3_94:
+            return 3.94;
+        case RF_TX_Power::dBm_3_23:
+            return 3.23;
+        default:
+            return 0;
+    }
+}
+
+uint16_t ATC_MiThermometer::getAdvertisingIntervalMs() {
+    return getAdvertisingIntervalSteps() * advertising_interval_step_time_ms;
+}
+
+uint32_t ATC_MiThermometer::getMeasureIntervalMs() {
+    return getMeasureIntervalSteps() * getAdvertisingIntervalMs();
+}
+
+uint16_t ATC_MiThermometer::getConnectLatencyMs() {
+    return getConnectLatencySteps() * connect_latency_step_time_ms;
+}
+
+uint16_t ATC_MiThermometer::getLcdUpdateIntervalMs() {
+    return getLcdUpdateIntervalSteps() * lcd_update_interval_step_time_ms;
+}
+
+uint32_t ATC_MiThermometer::getAveragingMeasurementsMs() {
+    return getMeasureIntervalMs() * getAveragingMeasurementsSteps();
+}
+
+uint16_t ATC_MiThermometer::getAveragingMeasurementsSec() {
+    return getAveragingMeasurementsMs() / 1000;
 }

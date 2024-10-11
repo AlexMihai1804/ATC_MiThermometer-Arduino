@@ -7,6 +7,10 @@
 #include "ATC_MiThermometer_structs.h"
 #include "ATC_MiThermometer_enums.h"
 
+const float advertising_interval_step_time_ms = 62.5;
+const uint8_t connect_latency_step_time_ms = 20;
+const uint8_t lcd_update_interval_step_time_ms = 50;
+
 class ATC_MiThermometer {
 private:
     const char *address;
@@ -128,6 +132,8 @@ public:
 
     RF_TX_Power getRfTxPower();
 
+    float getRfTxPowerdBm();
+
     bool getLowPowerMeasures();
 
     bool getTransmitMeasures();
@@ -160,17 +166,29 @@ public:
 
     int8_t getHumidityOffsetCal();
 
-    uint8_t getAdvertisingInterval();
+    uint8_t getAdvertisingIntervalSteps();
 
-    uint8_t getMeasureInterval();
+    uint16_t getAdvertisingIntervalMs();
 
-    uint8_t getConnectLatency();
+    uint8_t getMeasureIntervalSteps();
 
-    uint8_t getLcdUpdateInterval();
+    uint32_t getMeasureIntervalMs();
+
+    uint8_t getConnectLatencySteps();
+
+    uint16_t getConnectLatencyMs();
+
+    uint8_t getLcdUpdateIntervalSteps();
+
+    uint16_t getLcdUpdateIntervalMs();
 
     HW_VERSION_ID getHwVersion();
 
-    uint8_t getAveragingMeasurements();
+    uint8_t getAveragingMeasurementsSteps();
+
+    uint32_t getAveragingMeasurementsMs();
+
+    uint16_t getAveragingMeasurementsSec();
 
 };
 
