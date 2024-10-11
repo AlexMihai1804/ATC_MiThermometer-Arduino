@@ -132,63 +132,127 @@ public:
 
     RF_TX_Power getRfTxPower();
 
+    void setRfTxPower(RF_TX_Power power);
+
     float getRfTxPowerdBm();
+
+    void setRfTxPowerdBm(float power);
 
     bool getLowPowerMeasures();
 
+    void setLowPowerMeasures(bool lowPowerMeasures);
+
     bool getTransmitMeasures();
+
+    void setTransmitMeasures(bool transmitMeasures);
 
     bool getShowBattery();
 
+    void setShowBattery(bool showBattery);
+
     bool getTempFOrC();
+
+    void setTempFOrC(bool tempFOrC);
 
     bool getBlinkingTimeSmile();
 
+    void setBlinkingTimeSmile(bool blinkingTimeSmile);
+
     bool getComfortSmiley();
+
+    void setComfortSmiley(bool comfortSmiley);
 
     bool getAdvCrypto();
 
+    void setAdvCrypto(bool advCrypto);
+
     bool getAdvFlags();
+
+    void setAdvFlags(bool advFlags);
 
     Smiley getSmiley();
 
+    void setSmiley(Smiley smiley);
+
     bool getBT5PHY();
+
+    void setBT5PHY(bool BT5PHY);
 
     bool getLongRange();
 
+    void setLongRange(bool longRange);
+
     bool getScreenOff();
+
+    void setScreenOff(bool screenOff);
 
     float getTempOffset();
 
+    void setTempOffset(float tempOffset);
+
     float getHumidityOffset();
+
+    void setHumidityOffset(float humidityOffset);
 
     int8_t getTempOffsetCal();
 
+    void setTempOffsetCal(int8_t tempOffsetCal);
+
     int8_t getHumidityOffsetCal();
+
+    void setHumidityOffsetCal(int8_t humidityOffsetCal);
 
     uint8_t getAdvertisingIntervalSteps();
 
+    void setAdvertisingIntervalSteps(uint8_t advertisingIntervalSteps);
+
     uint16_t getAdvertisingIntervalMs();
+
+    void setAdvertisingIntervalMs(uint16_t advertisingIntervalMs);
 
     uint8_t getMeasureIntervalSteps();
 
+    void setMeasureIntervalSteps(uint8_t measureIntervalSteps);
+
     uint32_t getMeasureIntervalMs();
+
+    void setMeasureIntervalMs(uint32_t measureIntervalMs);
 
     uint8_t getConnectLatencySteps();
 
+    void setConnectLatencySteps(uint8_t connectLatencySteps);
+
     uint16_t getConnectLatencyMs();
+
+    void setConnectLatencyMs(uint16_t connectLatencyMs);
 
     uint8_t getLcdUpdateIntervalSteps();
 
+    void setLcdUpdateIntervalSteps(uint8_t lcdUpdateIntervalSteps);
+
     uint16_t getLcdUpdateIntervalMs();
+
+    void setLcdUpdateIntervalMs(uint16_t lcdUpdateIntervalMs);
 
     HW_VERSION_ID getHwVersion();
 
     uint8_t getAveragingMeasurementsSteps();
 
+    void setAveragingMeasurementsSteps(uint8_t averagingMeasurementsSteps);
+
     uint32_t getAveragingMeasurementsMs();
 
+    void setAveragingMeasurementsMs(uint32_t averagingMeasurementsMs);
+
     uint16_t getAveragingMeasurementsSec();
+
+    void setAveragingMeasurementsSec(uint16_t averagingMeasurementsSec);
+
+    uint8_t *parseSettings(ATC_MiThermometer_Settings settings);
+
+    void sendSettings(ATC_MiThermometer_Settings settings);
+
+    ATC_MiThermometer_Settings getSettings();
 
 };
 

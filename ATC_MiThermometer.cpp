@@ -1055,3 +1055,448 @@ uint32_t ATC_MiThermometer::getAveragingMeasurementsMs() {
 uint16_t ATC_MiThermometer::getAveragingMeasurementsSec() {
     return getAveragingMeasurementsMs() / 1000;
 }
+
+uint8_t *ATC_MiThermometer::parseSettings(ATC_MiThermometer_Settings settings) {
+    uint8_t *data = new uint8_t[12];
+    data[0] = 0x55;
+    data[1] = 0x0A;
+    data[2] = settings.lp_measures << 7 | settings.tx_measures << 6 | settings.show_battery << 5 |
+              settings.temp_F_or_C << 4 | settings.blinking_time_smile << 3 | settings.comfort_smiley << 2 |
+              settings.advertising_type;
+    data[3] = settings.screen_off << 7 | settings.long_range << 6 | settings.bt5phy << 5 | settings.adv_flags << 4 |
+              settings.adv_crypto << 3 | settings.smiley;
+    data[4] = settings.temp_offset * 10;
+    data[5] = settings.humidity_offset * 10;
+    data[6] = settings.advertising_interval;
+    data[7] = settings.measure_interval;
+    data[8] = static_cast<uint8_t>(settings.rfTxPower);
+    data[9] = settings.connect_latency;
+    data[10] = settings.lcd_update_interval;
+    data[11] = settings.averaging_measurements;
+    return data;
+}
+
+void ATC_MiThermometer::sendSettings(ATC_MiThermometer_Settings settings) {
+    uint8_t attempts = 0;
+    while (!isConnected() && attempts < 5) {
+        connect();
+        attempts++;
+        yield();
+    }
+    if (!isConnected()) {
+        Serial.println("Failed to connect to device");
+        return;
+    }
+    if (commandService == nullptr) {
+        connect_to_command_service();
+        if (commandService == nullptr) {
+            Serial.println("Command service not found");
+            return;
+        }
+    }
+    if (commandCharacteristic == nullptr) {
+        connect_to_command_characteristic();
+        if (commandCharacteristic == nullptr) {
+            Serial.println("Command characteristic not found");
+            return;
+        }
+    }
+    received_settings = false;
+    if (commandCharacteristic->canNotify()) {
+        commandCharacteristic->subscribe(true,
+                                         [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
+                                                size_t length, bool isNotify) {
+                                             this->notifySettingsCallback(pBLERemoteCharacteristic, pData, length,
+                                                                          isNotify);
+                                         });
+    } else {
+        Serial.println("Command characteristic cannot notify");
+        return;
+    }
+    uint8_t *data = parseSettings(settings);
+    sendCommand(data, 12);
+    delete[] data;
+    uint32_t start = millis();
+    while (!received_settings && millis() - start < 5000) {
+        delay(100);
+        yield();
+    }
+    if (!received_settings) {
+        Serial.println("Failed to read settings");
+    }
+    commandCharacteristic->unsubscribe();
+}
+
+void ATC_MiThermometer::setRfTxPower(RF_TX_Power power) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.rfTxPower = power;
+    sendSettings(settings);
+}
+
+ATC_MiThermometer_Settings ATC_MiThermometer::getSettings() {
+    return settings;
+}
+
+void ATC_MiThermometer::setRfTxPowerdBm(float power) {
+    float min_diff = 1000;
+    RF_TX_Power closest_power = RF_TX_Power::dBm_3_01;
+    if (abs(power - 3.01) < min_diff) {
+        min_diff = abs(power - 3.01);
+        closest_power = RF_TX_Power::dBm_3_01;
+    }
+    if (abs(power - 2.81) < min_diff) {
+        min_diff = abs(power - 2.81);
+        closest_power = RF_TX_Power::dBm_2_81;
+    }
+    if (abs(power - 2.61) < min_diff) {
+        min_diff = abs(power - 2.61);
+        closest_power = RF_TX_Power::dBm_2_61;
+    }
+    if (abs(power - 2.39) < min_diff) {
+        min_diff = abs(power - 2.39);
+        closest_power = RF_TX_Power::dBm_2_39;
+    }
+    if (abs(power - 1.99) < min_diff) {
+        min_diff = abs(power - 1.99);
+        closest_power = RF_TX_Power::dBm_1_99;
+    }
+    if (abs(power - 1.73) < min_diff) {
+        min_diff = abs(power - 1.73);
+        closest_power = RF_TX_Power::dBm_1_73;
+    }
+    if (abs(power - 1.45) < min_diff) {
+        min_diff = abs(power - 1.45);
+        closest_power = RF_TX_Power::dBm_1_45;
+    }
+    if (abs(power - 1.17) < min_diff) {
+        min_diff = abs(power - 1.17);
+        closest_power = RF_TX_Power::dBm_1_17;
+    }
+    if (abs(power - 0.90) < min_diff) {
+        min_diff = abs(power - 0.90);
+        closest_power = RF_TX_Power::dBm_0_90;
+    }
+    if (abs(power - 0.58) < min_diff) {
+        min_diff = abs(power - 0.58);
+        closest_power = RF_TX_Power::dBm_0_58;
+    }
+    if (abs(power - 0.04) < min_diff) {
+        min_diff = abs(power - 0.04);
+        closest_power = RF_TX_Power::dBm_0_04;
+    }
+    if (abs(power + 0.14) < min_diff) {
+        min_diff = abs(power + 0.14);
+        closest_power = RF_TX_Power::dBm_n0_14;
+    }
+    if (abs(power + 0.97) < min_diff) {
+        min_diff = abs(power + 0.97);
+        closest_power = RF_TX_Power::dBm_n0_97;
+    }
+    if (abs(power + 1.42) < min_diff) {
+        min_diff = abs(power + 1.42);
+        closest_power = RF_TX_Power::dBm_n1_42;
+    }
+    if (abs(power + 1.89) < min_diff) {
+        min_diff = abs(power + 1.89);
+        closest_power = RF_TX_Power::dBm_n1_89;
+    }
+    if (abs(power + 2.48) < min_diff) {
+        min_diff = abs(power + 2.48);
+        closest_power = RF_TX_Power::dBm_n2_48;
+    }
+    if (abs(power + 3.03) < min_diff) {
+        min_diff = abs(power + 3.03);
+        closest_power = RF_TX_Power::dBm_n3_03;
+    }
+    if (abs(power + 3.61) < min_diff) {
+        min_diff = abs(power + 3.61);
+        closest_power = RF_TX_Power::dBm_n3_61;
+    }
+    if (abs(power + 4.26) < min_diff) {
+        min_diff = abs(power + 4.26);
+        closest_power = RF_TX_Power::dBm_n4_26;
+    }
+    if (abs(power + 5.03) < min_diff) {
+        min_diff = abs(power + 5.03);
+        closest_power = RF_TX_Power::dBm_n5_03;
+    }
+    if (abs(power + 5.81) < min_diff) {
+        min_diff = abs(power + 5.81);
+        closest_power = RF_TX_Power::dBm_n5_81;
+    }
+    if (abs(power + 6.67) < min_diff) {
+        min_diff = abs(power + 6.67);
+        closest_power = RF_TX_Power::dBm_n6_67;
+    }
+    if (abs(power + 7.65) < min_diff) {
+        min_diff = abs(power + 7.65);
+        closest_power = RF_TX_Power::dBm_n7_65;
+    }
+    if (abs(power + 8.65) < min_diff) {
+        min_diff = abs(power + 8.65);
+        closest_power = RF_TX_Power::dBm_n8_65;
+    }
+    if (abs(power + 9.89) < min_diff) {
+        min_diff = abs(power + 9.89);
+        closest_power = RF_TX_Power::dBm_n9_89;
+    }
+    if (abs(power + 11.4) < min_diff) {
+        min_diff = abs(power + 11.4);
+        closest_power = RF_TX_Power::dBm_n11_4;
+    }
+    if (abs(power + 13.29) < min_diff) {
+        min_diff = abs(power + 13.29);
+        closest_power = RF_TX_Power::dBm_n13_29;
+    }
+    if (abs(power + 15.88) < min_diff) {
+        min_diff = abs(power + 15.88);
+        closest_power = RF_TX_Power::dBm_n15_88;
+    }
+    if (abs(power + 19.27) < min_diff) {
+        min_diff = abs(power + 19.27);
+        closest_power = RF_TX_Power::dBm_n19_27;
+    }
+    if (abs(power + 25.18) < min_diff) {
+        min_diff = abs(power + 25.18);
+        closest_power = RF_TX_Power::dBm_n25_18;
+    }
+    if (abs(power + 30) < min_diff) {
+        min_diff = abs(power + 30);
+        closest_power = RF_TX_Power::dBm_n30;
+    }
+    if (abs(power + 50) < min_diff) {
+        min_diff = abs(power + 50);
+        closest_power = RF_TX_Power::dBm_n50;
+    }
+    if (abs(power - 10.46) < min_diff) {
+        min_diff = abs(power - 10.46);
+        closest_power = RF_TX_Power::dBm_10_46;
+    }
+    if (abs(power - 10.29) < min_diff) {
+        min_diff = abs(power - 10.29);
+        closest_power = RF_TX_Power::dBm_10_29;
+    }
+    if (abs(power - 10.01) < min_diff) {
+        min_diff = abs(power - 10.01);
+        closest_power = RF_TX_Power::dBm_10_01;
+    }
+    if (abs(power - 9.81) < min_diff) {
+        min_diff = abs(power - 9.81);
+        closest_power = RF_TX_Power::dBm_9_81;
+    }
+    if (abs(power - 9.48) < min_diff) {
+        min_diff = abs(power - 9.48);
+        closest_power = RF_TX_Power::dBm_9_48;
+    }
+    if (abs(power - 9.24) < min_diff) {
+        min_diff = abs(power - 9.24);
+        closest_power = RF_TX_Power::dBm_9_24;
+    }
+    if (abs(power - 8.97) < min_diff) {
+        min_diff = abs(power - 8.97);
+        closest_power = RF_TX_Power::dBm_8_97;
+    }
+    if (abs(power - 8.73) < min_diff) {
+        min_diff = abs(power - 8.73);
+        closest_power = RF_TX_Power::dBm_8_73;
+    }
+    if (abs(power - 8.44) < min_diff) {
+        min_diff = abs(power - 8.44);
+        closest_power = RF_TX_Power::dBm_8_44;
+    }
+    if (abs(power - 8.13) < min_diff) {
+        min_diff = abs(power - 8.13);
+        closest_power = RF_TX_Power::dBm_8_13;
+    }
+    if (abs(power - 7.79) < min_diff) {
+        min_diff = abs(power - 7.79);
+        closest_power = RF_TX_Power::dBm_7_79;
+    }
+    if (abs(power - 7.41) < min_diff) {
+        min_diff = abs(power - 7.41);
+        closest_power = RF_TX_Power::dBm_7_41;
+    }
+    if (abs(power - 7.02) < min_diff) {
+        min_diff = abs(power - 7.02);
+        closest_power = RF_TX_Power::dBm_7_02;
+    }
+    if (abs(power - 6.60) < min_diff) {
+        min_diff = abs(power - 6.60);
+        closest_power = RF_TX_Power::dBm_6_60;
+    }
+    if (abs(power - 6.14) < min_diff) {
+        min_diff = abs(power - 6.14);
+        closest_power = RF_TX_Power::dBm_6_14;
+    }
+    if (abs(power - 5.65) < min_diff) {
+        min_diff = abs(power - 5.65);
+        closest_power = RF_TX_Power::dBm_5_65;
+    }
+    if (abs(power - 5.13) < min_diff) {
+        min_diff = abs(power - 5.13);
+        closest_power = RF_TX_Power::dBm_5_13;
+    }
+    if (abs(power - 4.57) < min_diff) {
+        min_diff = abs(power - 4.57);
+        closest_power = RF_TX_Power::dBm_4_57;
+    }
+    if (abs(power - 3.94) < min_diff) {
+        min_diff = abs(power - 3.94);
+        closest_power = RF_TX_Power::dBm_3_94;
+    }
+    if (abs(power - 3.23) < min_diff) {
+        min_diff = abs(power - 3.23);
+        closest_power = RF_TX_Power::dBm_3_23;
+    }
+    setRfTxPower(closest_power);
+}
+
+void ATC_MiThermometer::setLowPowerMeasures(bool lowPowerMeasures) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.lp_measures = lowPowerMeasures;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setTransmitMeasures(bool transmitMeasures) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.tx_measures = transmitMeasures;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setShowBattery(bool showBattery) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.show_battery = showBattery;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setTempFOrC(bool tempFOrC) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.temp_F_or_C = tempFOrC;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setBlinkingTimeSmile(bool blinkingTimeSmile) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.blinking_time_smile = blinkingTimeSmile;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setComfortSmiley(bool comfortSmiley) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.comfort_smiley = comfortSmiley;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setAdvCrypto(bool advCrypto) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.adv_crypto = advCrypto;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setAdvFlags(bool advFlags) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.adv_flags = advFlags;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setSmiley(Smiley smiley) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.smiley = smiley;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setBT5PHY(bool BT5PHY) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.bt5phy = BT5PHY;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setLongRange(bool longRange) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.long_range = longRange;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setScreenOff(bool screenOff) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.screen_off = screenOff;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setTempOffset(float tempOffset) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.temp_offset = tempOffset;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setHumidityOffset(float humidityOffset) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.humidity_offset = humidityOffset;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setTempOffsetCal(int8_t tempOffsetCal) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.temp_offset_cal = tempOffsetCal;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setHumidityOffsetCal(int8_t humidityOffsetCal) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.humidity_offset_cal = humidityOffsetCal;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setAdvertisingIntervalSteps(uint8_t advertisingIntervalSteps) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.advertising_interval = advertisingIntervalSteps;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setAdvertisingIntervalMs(uint16_t advertisingIntervalMs) {
+    setAdvertisingIntervalSteps(advertisingIntervalMs / advertising_interval_step_time_ms);
+}
+
+void ATC_MiThermometer::setMeasureIntervalMs(uint32_t measureIntervalMs) {
+    setMeasureIntervalSteps(measureIntervalMs / getAdvertisingIntervalMs());
+}
+
+void ATC_MiThermometer::setMeasureIntervalSteps(uint8_t measureIntervalSteps) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.measure_interval = measureIntervalSteps;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setConnectLatencySteps(uint8_t connectLatencySteps) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.connect_latency = connectLatencySteps;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setConnectLatencyMs(uint16_t connectLatencyMs) {
+    setConnectLatencySteps(connectLatencyMs / connect_latency_step_time_ms);
+}
+
+void ATC_MiThermometer::setLcdUpdateIntervalSteps(uint8_t lcdUpdateIntervalSteps) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.lcd_update_interval = lcdUpdateIntervalSteps;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setLcdUpdateIntervalMs(uint16_t lcdUpdateIntervalMs) {
+    setLcdUpdateIntervalSteps(lcdUpdateIntervalMs / lcd_update_interval_step_time_ms);
+}
+
+void ATC_MiThermometer::setAveragingMeasurementsSteps(uint8_t averagingMeasurementsSteps) {
+    ATC_MiThermometer_Settings settings = getSettings();
+    settings.averaging_measurements = averagingMeasurementsSteps;
+    sendSettings(settings);
+}
+
+void ATC_MiThermometer::setAveragingMeasurementsMs(uint32_t averagingMeasurementsMs) {
+    setAveragingMeasurementsSteps(averagingMeasurementsMs / getMeasureIntervalMs());
+}
+
+void ATC_MiThermometer::setAveragingMeasurementsSec(uint16_t averagingMeasurementsSec) {
+    setAveragingMeasurementsMs(averagingMeasurementsSec * 1000);
+}
