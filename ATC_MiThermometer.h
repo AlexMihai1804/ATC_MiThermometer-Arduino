@@ -6,6 +6,7 @@
 #include <cstdint>
 #include "ATC_MiThermometer_structs.h"
 #include "ATC_MiThermometer_enums.h"
+#include <ctime>
 
 const float advertising_interval_step_time_ms = 62.5;
 const uint8_t connect_latency_step_time_ms = 20;
@@ -255,6 +256,10 @@ public:
     ATC_MiThermometer_Settings getSettings();
 
     void resetSettings();
+
+    void setClock(uint8_t hours, uint8_t minutes, uint8_t seconds, uint8_t day, uint8_t month, uint16_t year);
+
+    void setClock(time_t time);
 };
 
 #endif // ATC_MI_THERMOMETER_NIMBLE_H

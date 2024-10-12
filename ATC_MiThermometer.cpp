@@ -1511,3 +1511,49 @@ void ATC_MiThermometer::resetSettings() {
     received_settings = false;
     readSettings();
 }
+
+void ATC_MiThermometer::setClock(time_t time) {
+    uint8_t attempts = 0;
+    while (!isConnected() && attempts < 5) {
+        connect();
+        attempts++;
+        yield();
+    }
+    if (!isConnected()) {
+        Serial.println("Failed to connect to device");
+        return;
+    }
+    if (commandService == nullptr) {
+        connect_to_command_service();
+        if (commandService == nullptr) {
+            Serial.println("Command service not found");
+            return;
+        }
+    }
+    if (commandCharacteristic == nullptr) {
+        connect_to_command_characteristic();
+        if (commandCharacteristic == nullptr) {
+            Serial.println("Command characteristic not found");
+            return;
+        }
+    }
+    uint8_t data[5];
+    data[0] = 0x23;
+    data[1] = (uint8_t) (time & 0xFF);
+    data[2] = (uint8_t) ((time >> 8) & 0xFF);
+    data[3] = (uint8_t) ((time >> 16) & 0xFF);
+    data[4] = (uint8_t) ((time >> 24) & 0xFF);
+    sendCommand(data, 5);
+}
+
+void ATC_MiThermometer::setClock(uint8_t hours, uint8_t minutes, uint8_t seconds, uint8_t day, uint8_t month,
+                                 uint16_t year) {
+    tm time{};
+    time.tm_hour = hours;
+    time.tm_min = minutes;
+    time.tm_sec = seconds;
+    time.tm_mday = day;
+    time.tm_mon = month - 1;
+    time.tm_year = year - 1900;
+    setClock(mktime(&time));
+}
