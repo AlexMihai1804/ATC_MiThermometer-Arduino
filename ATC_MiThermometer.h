@@ -248,12 +248,13 @@ public:
 
     void setAveragingMeasurementsSec(uint16_t averagingMeasurementsSec);
 
-    uint8_t *parseSettings(ATC_MiThermometer_Settings settings);
+    uint8_t *parseSettings(ATC_MiThermometer_Settings settingsToParse);
 
     void sendSettings(ATC_MiThermometer_Settings settings);
 
     ATC_MiThermometer_Settings getSettings();
 
+    void resetSettings();
 };
 
 #endif // ATC_MI_THERMOMETER_NIMBLE_H
