@@ -1,17 +1,20 @@
-#ifndef ATC_MI_TERMOMETER_ESP32_ATC_MITHERMOMETER_ENUMS_H
-#define ATC_MI_TERMOMETER_ESP32_ATC_MITHERMOMETER_ENUMS_H
-enum Advertising_Type {
+#ifndef ATC_MI_THERMOMETER_ENUMS_H
+#define ATC_MI_THERMOMETER_ENUMS_H
+
+enum class Advertising_Type {
     ATC1441 = 0,
     PVVX = 1,
     XIAOMI = 2,
     BTHOME = 3,
 };
-enum Connection_mode {
+
+enum class Connection_mode {
     ADVERTISING = 0,
     NOTIFICATION = 1,
     CONNECTION = 2,
 };
-enum Smiley {
+
+enum class Smiley {
     SMILEY_OFF = 0,
     SMILEY_HAPPY = 1,
     SMILEY_SAD = 2,
@@ -22,27 +25,27 @@ enum Smiley {
     SMILEY_P_OOO = 7,
 };
 
-enum HW_VERSION_ID {
-    HW_VER_LYWSD03MMC_B14 = 0,    // LYWSD03MMC B1.4
-    HW_VER_MHO_C401 = 1,          // MHO-C401 2020
-    HW_VER_CGG1 = 2,              // CGG1 2020/2021
-    HW_VER_LYWSD03MMC_B19 = 3,    // LYWSD03MMC B1.9
-    HW_VER_LYWSD03MMC_B16 = 4,    // LYWSD03MMC B1.6
-    HW_VER_LYWSD03MMC_B17 = 5,    // LYWSD03MMC B1.7
-    HW_VER_CGDK2 = 6,             // CGDK2
-    HW_VER_CGG1_2022 = 7,         // CGG1 2022
-    HW_VER_MHO_C401_2022 = 8,     // MHO-C401N 2022
-    HW_VER_MJWSD05MMC = 9,        // MJWSD05MMC
-    HW_VER_LYWSD03MMC_B15 = 10,   // LYWSD03MMC B1.5
-    HW_VER_MHO_C122 = 11,         // MHO-C122
-    HW_VER_TB03F = 16,            // DIY TB-03F-Kit
-    HW_VER_TS0201 = 17,           // ZigBee TS0201
-    HW_VER_TNK01 = 18,            // DIY - modul PB-03F, Water tank controller
-    HW_VER_TH03Z = 22,            // ZigBee TH03Z
-    HW_VER_ZTH01 = 27,            // ZigBee ZTH01
-    HW_VER_ZTH02 = 28,            // ZigBee ZTH02
-    HW_VER_PLM1 = 29,             // Tuya BLE Plant Monitor ECF-SGS01-A rev1.3
-    HW_VER_EXTENDED = 15          // DIY - hardware extensibil
+enum class HW_VERSION_ID {
+    HW_VER_LYWSD03MMC_B14 = 0,
+    HW_VER_MHO_C401 = 1,
+    HW_VER_CGG1 = 2,
+    HW_VER_LYWSD03MMC_B19 = 3,
+    HW_VER_LYWSD03MMC_B16 = 4,
+    HW_VER_LYWSD03MMC_B17 = 5,
+    HW_VER_CGDK2 = 6,
+    HW_VER_CGG1_2022 = 7,
+    HW_VER_MHO_C401_2022 = 8,
+    HW_VER_MJWSD05MMC = 9,
+    HW_VER_LYWSD03MMC_B15 = 10,
+    HW_VER_MHO_C122 = 11,
+    HW_VER_TB03F = 16,
+    HW_VER_TS0201 = 17,
+    HW_VER_TNK01 = 18,
+    HW_VER_TH03Z = 22,
+    HW_VER_ZTH01 = 27,
+    HW_VER_ZTH02 = 28,
+    HW_VER_PLM1 = 29,
+    HW_VER_EXTENDED = 15
 };
 
 enum class RF_TX_Power {
@@ -99,4 +102,5 @@ enum class RF_TX_Power {
     dBm_3_94 = 25,
     dBm_3_23 = 23
 };
-#endif
+
+#endif // ATC_MI_THERMOMETER_ENUMS_H

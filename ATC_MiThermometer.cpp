@@ -1,5 +1,10 @@
 #include "ATC_MiThermometer.h"
 #include <cmath>
+#include <algorithm>
+#include <mutex>
+#include <map>
+
+static std::mutex bleMutex;
 
 ATC_MiThermometer::ATC_MiThermometer(const char *address, Connection_mode connection_mode)
         : address(address), pClient(nullptr), environmentService(nullptr), connection_mode(connection_mode),
@@ -10,16 +15,17 @@ ATC_MiThermometer::ATC_MiThermometer(const char *address, Connection_mode connec
           temperature(0), temperature_precise(0), humidity(0), battery_mv(0), battery_level(0) {
 }
 
+ATC_MiThermometer::~ATC_MiThermometer() {
+    disconnect();
+}
+
 void ATC_MiThermometer::connect() {
-    if (pClient != nullptr) {
-        if (pClient->isConnected()) {
-            pClient->disconnect();
-        }
-        NimBLEDevice::deleteClient(pClient);
-        pClient = nullptr;
+    std::lock_guard<std::mutex> lock(bleMutex);
+    if (pClient && pClient->isConnected()) {
+        pClient->disconnect();
     }
     pClient = NimBLEDevice::createClient();
-    if (pClient == nullptr) {
+    if (!pClient) {
         Serial.println("Failed to create BLE client");
         return;
     }
@@ -33,121 +39,120 @@ void ATC_MiThermometer::connect() {
     Serial.printf("Failed to connect to %s after 5 attempts\n", address);
 }
 
-bool ATC_MiThermometer::isConnected() {
+bool ATC_MiThermometer::isConnected() const {
     return pClient && pClient->isConnected();
 }
 
-void ATC_MiThermometer::connect_to_environment_service() {
+void ATC_MiThermometer::connectToEnvironmentService() {
     environmentService = pClient->getService("181A");
-    if (environmentService == nullptr) {
+    if (!environmentService) {
         Serial.printf("Failed to find service %s\n", "181A");
-        return;
     }
 }
 
-void ATC_MiThermometer::connect_to_temperature_characteristic() {
-    if (environmentService == nullptr) {
-        connect_to_environment_service();
-        if (environmentService == nullptr) {
+void ATC_MiThermometer::connectToTemperatureCharacteristic() {
+    if (!environmentService) {
+        connectToEnvironmentService();
+        if (!environmentService) {
             return;
         }
     }
     temperatureCharacteristic = environmentService->getCharacteristic("2A1F");
-    if (temperatureCharacteristic == nullptr) {
+    if (!temperatureCharacteristic) {
         Serial.printf("Failed to find characteristic %s\n", "2A1F");
-        return;
     }
 }
 
-void ATC_MiThermometer::begin_notify_temp() {
-    if (temperatureCharacteristic == nullptr) {
-        connect_to_temperature_characteristic();
-        if (temperatureCharacteristic == nullptr) {
+void ATC_MiThermometer::beginNotifyTemp() {
+    if (!temperatureCharacteristic) {
+        connectToTemperatureCharacteristic();
+        if (!temperatureCharacteristic) {
             return;
         }
     }
     if (temperatureCharacteristic->canNotify()) {
         temperatureCharacteristic->subscribe(true, [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
-                                                          uint8_t *pData, size_t length, bool isNotify) {
+                                                          const uint8_t *pData, size_t length, bool isNotify) {
             this->notifyTempCallback(pBLERemoteCharacteristic, pData, length, isNotify);
         });
         started_notify_temp = true;
     }
 }
 
-void ATC_MiThermometer::notifyTempCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
+void ATC_MiThermometer::notifyTempCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
                                            size_t length, bool isNotify) {
     if (length >= 2) {
         uint16_t temp = (pData[1] << 8) | pData[0];
-        temperature = (float) temp / 10.0f;
+        temperature = static_cast<float>(temp) / 10.0f;
     } else {
         Serial.println("Received invalid temperature data");
     }
 }
 
-void ATC_MiThermometer::connect_to_temperature_precise_characteristic() {
-    if (environmentService == nullptr) {
-        connect_to_environment_service();
-        if (environmentService == nullptr) {
+void ATC_MiThermometer::connectToTemperaturePreciseCharacteristic() {
+    if (!environmentService) {
+        connectToEnvironmentService();
+        if (!environmentService) {
             return;
         }
     }
     temperaturePreciseCharacteristic = environmentService->getCharacteristic("2A6E");
-    if (temperaturePreciseCharacteristic == nullptr) {
+    if (!temperaturePreciseCharacteristic) {
         return;
     }
 }
 
-void ATC_MiThermometer::begin_notify_temp_precise() {
-    if (temperaturePreciseCharacteristic == nullptr) {
-        connect_to_temperature_precise_characteristic();
-        if (temperaturePreciseCharacteristic == nullptr) {
+void ATC_MiThermometer::beginNotifyTempPrecise() {
+    if (!temperaturePreciseCharacteristic) {
+        connectToTemperaturePreciseCharacteristic();
+        if (!temperaturePreciseCharacteristic) {
             return;
         }
     }
     if (temperaturePreciseCharacteristic->canNotify()) {
         temperaturePreciseCharacteristic->subscribe(true, [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
-                                                                 uint8_t *pData, size_t length, bool isNotify) {
+                                                                 const uint8_t *pData, size_t length, bool isNotify) {
             this->notifyTempPreciseCallback(pBLERemoteCharacteristic, pData, length, isNotify);
         });
         started_notify_temp_precise = true;
     }
 }
 
-void ATC_MiThermometer::notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
-                                                  size_t length, bool isNotify) {
+void
+ATC_MiThermometer::notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
+                                             size_t length, bool isNotify) {
     if (length >= 2) {
         uint16_t temp = (pData[1] << 8) | pData[0];
-        temperature_precise = (float) temp / 100.0f;
+        temperature_precise = static_cast<float>(temp) / 100.0f;
     } else {
         Serial.println("Received invalid precise temperature data");
     }
 }
 
-void ATC_MiThermometer::connect_to_humidity_characteristic() {
-    if (environmentService == nullptr) {
-        connect_to_environment_service();
-        if (environmentService == nullptr) {
+void ATC_MiThermometer::connectToHumidityCharacteristic() {
+    if (!environmentService) {
+        connectToEnvironmentService();
+        if (!environmentService) {
             return;
         }
     }
     humidityCharacteristic = environmentService->getCharacteristic("2A6F");
-    if (humidityCharacteristic == nullptr) {
+    if (!humidityCharacteristic) {
         Serial.printf("Failed to find characteristic %s\n", "2A6F");
-        return;
     }
 }
 
-void ATC_MiThermometer::begin_notify_humidity() {
-    if (humidityCharacteristic == nullptr) {
-        connect_to_humidity_characteristic();
-        if (humidityCharacteristic == nullptr) {
+void ATC_MiThermometer::beginNotifyHumidity() {
+    if (!humidityCharacteristic) {
+        connectToHumidityCharacteristic();
+        if (!humidityCharacteristic) {
             return;
         }
     }
     if (humidityCharacteristic->canNotify()) {
         humidityCharacteristic->subscribe(true,
-                                          [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
+                                          [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
+                                                 const uint8_t *pData,
                                                  size_t length, bool isNotify) {
                                               this->notifyHumidityCallback(pBLERemoteCharacteristic, pData, length,
                                                                            isNotify);
@@ -156,47 +161,48 @@ void ATC_MiThermometer::begin_notify_humidity() {
     }
 }
 
-void ATC_MiThermometer::notifyHumidityCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
-                                               size_t length, bool isNotify) {
+void
+ATC_MiThermometer::notifyHumidityCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
+                                          size_t length, bool isNotify) {
     if (length >= 2) {
         uint16_t hum = (pData[1] << 8) | pData[0];
-        humidity = (float) hum / 100.0f;
+        humidity = static_cast<float>(hum) / 100.0f;
     } else {
         Serial.println("Received invalid humidity data");
     }
 }
 
-void ATC_MiThermometer::connect_to_battery_service() {
+void ATC_MiThermometer::connectToBatteryService() {
     batteryService = pClient->getService("180F");
-    if (batteryService == nullptr) {
+    if (!batteryService) {
         return;
     }
 }
 
-void ATC_MiThermometer::connect_to_battery_characteristic() {
-    if (batteryService == nullptr) {
-        connect_to_battery_service();
-        if (batteryService == nullptr) {
+void ATC_MiThermometer::connectToBatteryCharacteristic() {
+    if (!batteryService) {
+        connectToBatteryService();
+        if (!batteryService) {
             return;
         }
     }
     batteryCharacteristic = batteryService->getCharacteristic("2A19");
-    if (batteryCharacteristic == nullptr) {
+    if (!batteryCharacteristic) {
         Serial.printf("Failed to find characteristic %s\n", "2A19");
-        return;
     }
 }
 
-void ATC_MiThermometer::begin_notify_battery() {
-    if (batteryCharacteristic == nullptr) {
-        connect_to_battery_characteristic();
-        if (batteryCharacteristic == nullptr) {
+void ATC_MiThermometer::beginNotifyBattery() {
+    if (!batteryCharacteristic) {
+        connectToBatteryCharacteristic();
+        if (!batteryCharacteristic) {
             return;
         }
     }
     if (batteryCharacteristic->canNotify()) {
         batteryCharacteristic->subscribe(true,
-                                         [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
+                                         [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
+                                                const uint8_t *pData,
                                                 size_t length, bool isNotify) {
                                              this->notifyBatteryCallback(pBLERemoteCharacteristic, pData, length,
                                                                          isNotify);
@@ -205,8 +211,9 @@ void ATC_MiThermometer::begin_notify_battery() {
     }
 }
 
-void ATC_MiThermometer::notifyBatteryCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
-                                              size_t length, bool isNotify) {
+void
+ATC_MiThermometer::notifyBatteryCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
+                                         size_t length, bool isNotify) {
     if (length >= 1) {
         battery_level = pData[0];
     } else {
@@ -214,51 +221,48 @@ void ATC_MiThermometer::notifyBatteryCallback(NimBLERemoteCharacteristic *pBLERe
     }
 }
 
-void ATC_MiThermometer::connect_to_command_service() {
+void ATC_MiThermometer::connectToCommandService() {
     commandService = pClient->getService("1F10");
-    if (commandService == nullptr) {
+    if (!commandService) {
         Serial.printf("Failed to find service %s\n", "1F10");
-        return;
     }
 }
 
-void ATC_MiThermometer::connect_to_command_characteristic() {
-    if (commandService == nullptr) {
-        connect_to_command_service();
-        if (commandService == nullptr) {
+void ATC_MiThermometer::connectToCommandCharacteristic() {
+    if (!commandService) {
+        connectToCommandService();
+        if (!commandService) {
             return;
         }
     }
     commandCharacteristic = commandService->getCharacteristic("1F1F");
-    if (commandCharacteristic == nullptr) {
+    if (!commandCharacteristic) {
         Serial.printf("Failed to find characteristic %s\n", "1F1F");
-        return;
     }
 }
 
 void ATC_MiThermometer::readSettings() {
+    std::lock_guard<std::mutex> lock(bleMutex);
     int attempts = 0;
     while (!isConnected() && attempts < 5) {
         connect();
         attempts++;
         yield();
-        if (!isConnected()) {
-        }
     }
     if (!isConnected()) {
         Serial.println("Failed to connect to device");
         return;
     }
-    if (commandService == nullptr) {
-        connect_to_command_service();
-        if (commandService == nullptr) {
+    if (!commandService) {
+        connectToCommandService();
+        if (!commandService) {
             Serial.println("Command service not found");
             return;
         }
     }
-    if (commandCharacteristic == nullptr) {
-        connect_to_command_characteristic();
-        if (commandCharacteristic == nullptr) {
+    if (!commandCharacteristic) {
+        connectToCommandCharacteristic();
+        if (!commandCharacteristic) {
             Serial.println("Command characteristic not found");
             return;
         }
@@ -266,7 +270,8 @@ void ATC_MiThermometer::readSettings() {
     received_settings = false;
     if (commandCharacteristic->canNotify()) {
         commandCharacteristic->subscribe(true,
-                                         [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
+                                         [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
+                                                const uint8_t *pData,
                                                 size_t length, bool isNotify) {
                                              this->notifySettingsCallback(pBLERemoteCharacteristic, pData, length,
                                                                           isNotify);
@@ -276,8 +281,8 @@ void ATC_MiThermometer::readSettings() {
         return;
     }
     delay(1000);
-    uint8_t data[1] = {0x55};
-    sendCommand(data, 1);
+    std::vector<uint8_t> data = {0x55};
+    sendCommand(data);
     uint32_t start = millis();
     while (!received_settings && millis() - start < 5000) {
         delay(100);
@@ -289,9 +294,10 @@ void ATC_MiThermometer::readSettings() {
     commandCharacteristic->unsubscribe();
 }
 
-void ATC_MiThermometer::notifySettingsCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
-                                               size_t length, bool isNotify) {
-    if (pData == nullptr || length == 0) {
+void
+ATC_MiThermometer::notifySettingsCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
+                                          size_t length, bool isNotify) {
+    if (!pData || length == 0) {
         Serial.println("Received empty data in notifySettingsCallback");
         return;
     }
@@ -315,8 +321,8 @@ void ATC_MiThermometer::notifySettingsCallback(NimBLERemoteCharacteristic *pBLER
         settings.adv_flags = (pData[3] & 0x10) != 0;
         settings.adv_crypto = (pData[3] & 0x08) != 0;
         settings.smiley = static_cast<Smiley>(pData[3] & 0x07);
-        settings.temp_offset = (float) static_cast<int8_t>(pData[4]) / 10.0f;
-        settings.humidity_offset = (float) static_cast<int8_t>(pData[5]) / 10.0f;
+        settings.temp_offset = static_cast<float>(static_cast<int8_t>(pData[4])) / 10.0f;
+        settings.humidity_offset = static_cast<float>(static_cast<int8_t>(pData[5])) / 10.0f;
         settings.advertising_interval = pData[6];
         settings.measure_interval = pData[7];
         settings.rfTxPower = static_cast<RF_TX_Power>(pData[8]);
@@ -327,28 +333,26 @@ void ATC_MiThermometer::notifySettingsCallback(NimBLERemoteCharacteristic *pBLER
     }
 }
 
-void ATC_MiThermometer::sendCommand(uint8_t *data, size_t length) {
-    if (commandCharacteristic == nullptr) {
-        connect_to_command_characteristic();
-        if (commandCharacteristic == nullptr) {
+void ATC_MiThermometer::sendCommand(const std::vector<uint8_t> &data) {
+    if (!commandCharacteristic) {
+        connectToCommandCharacteristic();
+        if (!commandCharacteristic) {
             Serial.println("Command characteristic not found, cannot send command");
             return;
         }
     }
-    bool success = commandCharacteristic->writeValue(data, length, true);
+    bool success = commandCharacteristic->writeValue(data.data(), data.size(), true);
     if (!success) {
         Serial.println("Failed to send command");
     }
 }
 
 void ATC_MiThermometer::disconnect() {
-    if (pClient != nullptr) {
-        if (pClient->isConnected()) {
-            pClient->disconnect();
-        }
-        NimBLEDevice::deleteClient(pClient);
-        pClient = nullptr;
+    std::lock_guard<std::mutex> lock(bleMutex);
+    if (pClient && pClient->isConnected()) {
+        pClient->disconnect();
     }
+    pClient = nullptr;
     environmentService = nullptr;
     batteryService = nullptr;
     commandService = nullptr;
@@ -359,176 +363,140 @@ void ATC_MiThermometer::disconnect() {
     commandCharacteristic = nullptr;
 }
 
-void ATC_MiThermometer::connect_to_all_services() {
-    connect_to_environment_service();
-    connect_to_battery_service();
-    connect_to_command_service();
+void ATC_MiThermometer::connectToAllServices() {
+    connectToEnvironmentService();
+    connectToBatteryService();
+    connectToCommandService();
 }
 
-void ATC_MiThermometer::connect_to_all_characteristics() {
-    connect_to_temperature_characteristic();
-    connect_to_temperature_precise_characteristic();
-    connect_to_humidity_characteristic();
-    connect_to_battery_characteristic();
-    connect_to_command_characteristic();
+void ATC_MiThermometer::connectToAllCharacteristics() {
+    connectToTemperatureCharacteristic();
+    connectToTemperaturePreciseCharacteristic();
+    connectToHumidityCharacteristic();
+    connectToBatteryCharacteristic();
+    connectToCommandCharacteristic();
 }
 
-void ATC_MiThermometer::begin_notify() {
-    begin_notify_temp();
-    begin_notify_temp_precise();
-    begin_notify_humidity();
-    begin_notify_battery();
+void ATC_MiThermometer::beginNotify() {
+    beginNotifyTemp();
+    beginNotifyTempPrecise();
+    beginNotifyHumidity();
+    beginNotifyBattery();
 }
 
 float ATC_MiThermometer::getTemperature() {
     if (connection_mode == Connection_mode::ADVERTISING) {
-        if (getAdvertisingType() == Advertising_Type::ATC1441) {
-            return temperature;
-        } else if (getAdvertisingType() == Advertising_Type::PVVX) {
-            return round(temperature_precise * 10.0f) / 10.0f;
-        } else if (getAdvertisingType() == Advertising_Type::BTHOME) {
-            return round(temperature_precise * 10.0f) / 10.0f;
-        }
-    } else if (connection_mode == Connection_mode::NOTIFICATION) {
+        return temperature;
+    } else {
         if (!started_notify_temp) {
             readTemperature();
         }
         return temperature;
-    } else if (connection_mode == Connection_mode::CONNECTION) {
-        readTemperature();
-        return temperature;
     }
-    return 0;
 }
 
 void ATC_MiThermometer::readTemperature() {
-    if (temperatureCharacteristic == nullptr) {
-        connect_to_temperature_characteristic();
-        if (temperatureCharacteristic == nullptr) {
+    if (!temperatureCharacteristic) {
+        connectToTemperatureCharacteristic();
+        if (!temperatureCharacteristic) {
             Serial.println("Temperature characteristic not found, cannot read temperature");
             return;
         }
     }
-    std::string value = temperatureCharacteristic->readValue();
-    if (value.length() >= 2) {
-        uint16_t temp = (value[1] << 8) | value[0];
-        temperature = (float) temp / 10.0f;
-    } else {
-        Serial.println("Failed to read temperature, insufficient data");
-    }
+    readCharacteristicValue(temperatureCharacteristic, [this](const std::string &value) {
+        if (value.length() >= 2) {
+            uint16_t temp = (value[1] << 8) | value[0];
+            temperature = static_cast<float>(temp) / 10.0f;
+        } else {
+            Serial.println("Failed to read temperature, insufficient data");
+        }
+    });
 }
 
 float ATC_MiThermometer::getTemperaturePrecise() {
     if (connection_mode == Connection_mode::ADVERTISING) {
-        if (getAdvertisingType() == Advertising_Type::ATC1441) {
-            return temperature;
-        } else if (getAdvertisingType() == Advertising_Type::PVVX) {
-            return temperature_precise;
-        } else if (getAdvertisingType() == Advertising_Type::BTHOME) {
-            return temperature_precise;
-        }
-    } else if (connection_mode == Connection_mode::NOTIFICATION) {
+        return temperature_precise;
+    } else {
         if (!started_notify_temp_precise) {
             readTemperaturePrecise();
         }
         return temperature_precise;
-    } else if (connection_mode == Connection_mode::CONNECTION) {
-        readTemperaturePrecise();
-        return temperature_precise;
     }
-    return 0;
 }
 
 void ATC_MiThermometer::readTemperaturePrecise() {
-    if (temperaturePreciseCharacteristic == nullptr) {
-        connect_to_temperature_precise_characteristic();
-        if (temperaturePreciseCharacteristic == nullptr) {
+    if (!temperaturePreciseCharacteristic) {
+        connectToTemperaturePreciseCharacteristic();
+        if (!temperaturePreciseCharacteristic) {
             Serial.println("Precise temperature characteristic not found, cannot read precise temperature");
             return;
         }
     }
-    std::string value = temperaturePreciseCharacteristic->readValue();
-    if (value.length() >= 2) {
-        uint16_t temp = (value[1] << 8) | value[0];
-        temperature_precise = (float) temp / 100.0f;
-    } else {
-        Serial.println("Failed to read precise temperature, insufficient data");
-    }
+    readCharacteristicValue(temperaturePreciseCharacteristic, [this](const std::string &value) {
+        if (value.length() >= 2) {
+            uint16_t temp = (value[1] << 8) | value[0];
+            temperature_precise = static_cast<float>(temp) / 100.0f;
+        } else {
+            Serial.println("Failed to read precise temperature, insufficient data");
+        }
+    });
 }
 
 float ATC_MiThermometer::getHumidity() {
     if (connection_mode == Connection_mode::ADVERTISING) {
-        if (getAdvertisingType() == Advertising_Type::ATC1441) {
-            return humidity;
-        } else if (getAdvertisingType() == Advertising_Type::PVVX) {
-            return humidity;
-        } else if (getAdvertisingType() == Advertising_Type::BTHOME) {
-            return humidity;
-        }
-    } else if (connection_mode == Connection_mode::NOTIFICATION) {
+        return humidity;
+    } else {
         if (!started_notify_humidity) {
             readHumidity();
         }
         return humidity;
-    } else if (connection_mode == Connection_mode::CONNECTION) {
-        readHumidity();
-        return humidity;
     }
-    return 0;
 }
 
 void ATC_MiThermometer::readHumidity() {
-    if (humidityCharacteristic == nullptr) {
-        connect_to_humidity_characteristic();
-        if (humidityCharacteristic == nullptr) {
+    if (!humidityCharacteristic) {
+        connectToHumidityCharacteristic();
+        if (!humidityCharacteristic) {
             Serial.println("Humidity characteristic not found, cannot read humidity");
             return;
         }
     }
-    std::string value = humidityCharacteristic->readValue();
-    if (value.length() >= 2) {
-        uint16_t hum = (value[1] << 8) | value[0];
-        humidity = (float) hum / 100.0f;
-    } else {
-        Serial.println("Failed to read humidity, insufficient data");
-    }
+    readCharacteristicValue(humidityCharacteristic, [this](const std::string &value) {
+        if (value.length() >= 2) {
+            uint16_t hum = (value[1] << 8) | value[0];
+            humidity = static_cast<float>(hum) / 100.0f;
+        } else {
+            Serial.println("Failed to read humidity, insufficient data");
+        }
+    });
 }
 
 uint8_t ATC_MiThermometer::getBatteryLevel() {
     if (connection_mode == Connection_mode::ADVERTISING) {
-        if (getAdvertisingType() == Advertising_Type::ATC1441) {
-            return battery_level;
-        } else if (getAdvertisingType() == Advertising_Type::PVVX) {
-            return battery_level;
-        } else if (getAdvertisingType() == Advertising_Type::BTHOME) {
-            return battery_level;
-        }
-    } else if (connection_mode == Connection_mode::NOTIFICATION) {
+        return battery_level;
+    } else {
         if (!started_notify_battery) {
             readBatteryLevel();
         }
         return battery_level;
-    } else if (connection_mode == Connection_mode::CONNECTION) {
-        readBatteryLevel();
-        return battery_level;
     }
-    return 0;
 }
 
 void ATC_MiThermometer::readBatteryLevel() {
-    if (batteryCharacteristic == nullptr) {
-        connect_to_battery_characteristic();
-        if (batteryCharacteristic == nullptr) {
+    if (!batteryCharacteristic) {
+        connectToBatteryCharacteristic();
+        if (!batteryCharacteristic) {
             Serial.println("Battery characteristic not found, cannot read battery level");
             return;
         }
     }
-    std::string value = batteryCharacteristic->readValue();
-    if (!value.empty()) {
-        battery_level = (uint8_t) value[0];
-    } else {
-        Serial.println("Failed to read battery level, insufficient data");
-    }
+    readCharacteristicValue(batteryCharacteristic, [this](const std::string &value) {
+        if (!value.empty()) {
+            battery_level = static_cast<uint8_t>(value[0]);
+        } else {
+            Serial.println("Failed to read battery level, insufficient data");
+        }
+    });
 }
 
 Advertising_Type ATC_MiThermometer::getAdvertisingType() {
@@ -538,72 +506,77 @@ Advertising_Type ATC_MiThermometer::getAdvertisingType() {
     return settings.advertising_type;
 }
 
-char *ATC_MiThermometer::getAddress() {
-    return (char *) address;
+const char *ATC_MiThermometer::getAddress() const {
+    return address;
 }
 
-void ATC_MiThermometer::parseAdvertisingData(uint8_t *data, size_t length) {
+void ATC_MiThermometer::parseAdvertisingData(const uint8_t *data, size_t length) {
     if (!read_settings) {
         readSettings();
-        if (connection_mode == ADVERTISING) {
+        if (connection_mode == Connection_mode::ADVERTISING) {
             disconnect();
         }
         return;
     }
-    if (getAdvertisingType() == Advertising_Type::BTHOME) {
-        parseAdvertisingDataBTHOME(data, length);
-    } else if (settings.advertising_type == Advertising_Type::PVVX) {
-        parseAdvertisingDataPVVX(data, length);
-    } else if (settings.advertising_type == Advertising_Type::ATC1441) {
-        parseAdvertisingDataATC1441(data, length);
-    } else {
-        Serial.println("Unknown advertising type");
+    switch (settings.advertising_type) {
+        case Advertising_Type::BTHOME:
+            parseAdvertisingDataBTHOME(data, length);
+            break;
+        case Advertising_Type::PVVX:
+            parseAdvertisingDataPVVX(data, length);
+            break;
+        case Advertising_Type::ATC1441:
+            parseAdvertisingDataATC1441(data, length);
+            break;
+        default:
+            Serial.println("Unknown advertising type");
+            break;
     }
 }
 
-void ATC_MiThermometer::parseAdvertisingDataATC1441(uint8_t *data, size_t length) {
+void ATC_MiThermometer::parseAdvertisingDataATC1441(const uint8_t *data, size_t length) {
     if (length < 18) {
-        Serial.println("Pachetul este prea scurt!");
+        Serial.println("Packet too short!");
         return;
     }
     int16_t temperatureRaw = (data[10] << 8) | data[11];
-    temperature = (float) temperatureRaw * 0.1f;
+    temperature = static_cast<float>(temperatureRaw) * 0.1f;
     humidity = data[12];
     battery_level = data[13];
     battery_mv = (data[14] << 8) | data[15];
 }
 
-void ATC_MiThermometer::parseAdvertisingDataPVVX(uint8_t *data, size_t length) {
+void ATC_MiThermometer::parseAdvertisingDataPVVX(const uint8_t *data, size_t length) {
     if (length < 19) {
-        Serial.println("Pachetul este prea scurt!");
+        Serial.println("Packet too short!");
         return;
     }
     uint8_t size = data[0];
     if (size != 18) {
-        Serial.println("Mărimea pachetului este incorectă!");
+        Serial.println("Incorrect packet size!");
         return;
     }
     uint8_t uid = data[1];
     if (uid != 0x16) {
-        Serial.println("UID incorect, nu este Service Data cu UUID de 16 biți!");
+        Serial.println("Incorrect UID, not Service Data with 16-bit UUID!");
         return;
     }
     uint16_t uuid = data[2] | (data[3] << 8);
     if (uuid != 0x181A) {
-        Serial.println("UUID incorect, nu este 0x181A!");
+        Serial.println("Incorrect UUID, not 0x181A!");
         return;
     }
     int16_t temperatureRaw = data[10] | (data[11] << 8);
-    temperature_precise = (float) temperatureRaw * 0.01f;
+    temperature_precise = static_cast<float>(temperatureRaw) * 0.01f;
     uint16_t humidityRaw = data[12] | (data[13] << 8);
-    humidity = (float) humidityRaw * 0.01f;
+    humidity = static_cast<float>(humidityRaw) * 0.01f;
     battery_mv = data[14] | (data[15] << 8);
     battery_level = data[16];
 }
 
-void ATC_MiThermometer::parseAdvertisingDataBTHOME(uint8_t *data, size_t length) {
+void ATC_MiThermometer::parseAdvertisingDataBTHOME(const uint8_t *data, size_t length) {
     if (length < 6) {
-        Serial.println("Pachetul este prea scurt!");
+        Serial.println("Packet too short!");
         return;
     }
     size_t index = 0;
@@ -613,66 +586,68 @@ void ATC_MiThermometer::parseAdvertisingDataBTHOME(uint8_t *data, size_t length)
             break;
         }
         if (index + 1 + element_length > length) {
-            Serial.println("Lungimea elementului AD depășește dimensiunea pachetului!");
+            Serial.println("AD element length exceeds packet size!");
             break;
         }
         uint8_t ad_type = data[index + 1];
-        uint8_t *ad_data = &data[index + 2];
+        const uint8_t *ad_data = &data[index + 2];
         uint8_t ad_data_length = element_length - 1;
         if (ad_type == 0x16) {
             if (ad_data_length < 3) {
-                Serial.println("Service Data prea scurt!");
+                Serial.println("Service Data too short!");
                 break;
             }
             uint16_t uuid = ad_data[0] | (ad_data[1] << 8);
             if (uuid != 0xFCD2) {
-                Serial.println("UUID necunoscut pentru BTHome!");
+                Serial.println("Unknown UUID for BTHome!");
                 break;
             }
             size_t dataIndex = 3;
             while (dataIndex < ad_data_length) {
+                if (dataIndex >= ad_data_length) {
+                    break;
+                }
                 uint8_t objectId = ad_data[dataIndex++];
                 switch (objectId) {
-                    case 0x00: {
+                    case 0x00: { // Packet ID
                         if (dataIndex >= ad_data_length) {
-                            Serial.println("Lipsă date pentru Packet ID!");
+                            Serial.println("Missing data for Packet ID!");
                             break;
                         }
                         uint8_t packetId = ad_data[dataIndex++];
                         break;
                     }
-                    case 0x01: {
+                    case 0x01: { // Battery Level
                         if (dataIndex >= ad_data_length) {
-                            Serial.println("Lipsă date pentru Nivel baterie!");
+                            Serial.println("Missing data for Battery Level!");
                             break;
                         }
-                        uint8_t batteryLevel = ad_data[dataIndex++];
-                        this->battery_level = batteryLevel;
+                        battery_level = ad_data[dataIndex++];
                         break;
                     }
-                    case 0x02: {
+                    case 0x02: { // Temperature
                         if (dataIndex + 1 >= ad_data_length) {
-                            Serial.println("Lipsă date pentru Temperatură!");
+                            Serial.println("Missing data for Temperature!");
                             break;
                         }
                         uint16_t temperatureRaw = ad_data[dataIndex] | (ad_data[dataIndex + 1] << 8);
-                        temperature_precise = (float) temperatureRaw * 0.01f;
+                        temperature_precise = static_cast<float>(temperatureRaw) * 0.01f;
                         dataIndex += 2;
                         break;
                     }
-                    case 0x03: {
+                    case 0x03: { // Humidity
                         if (dataIndex + 1 >= ad_data_length) {
-                            Serial.println("Lipsă date pentru Umiditate!");
+                            Serial.println("Missing data for Humidity!");
                             break;
                         }
                         uint16_t humidityRaw = ad_data[dataIndex] | (ad_data[dataIndex + 1] << 8);
-                        humidity = (float) humidityRaw * 0.01f;
+                        humidity = static_cast<float>(humidityRaw) * 0.01f;
                         dataIndex += 2;
                         break;
                     }
-                    case 0x0C: {
+                    case 0x0C: { // Voltage
                         if (dataIndex + 1 >= ad_data_length) {
-                            Serial.println("Lipsă date pentru Voltage!");
+                            Serial.println("Missing data for Voltage!");
                             break;
                         }
                         uint16_t voltageRaw = ad_data[dataIndex] | (ad_data[dataIndex + 1] << 8);
@@ -726,9 +701,9 @@ void ATC_MiThermometer::init() {
         disconnect();
         return;
     } else if (connection_mode == Connection_mode::NOTIFICATION) {
-        connect_to_all_services();
-        connect_to_all_characteristics();
-        begin_notify();
+        connectToAllServices();
+        connectToAllCharacteristics();
+        beginNotify();
     } else if (connection_mode == Connection_mode::CONNECTION) {
         readTemperature();
         readTemperaturePrecise();
@@ -737,29 +712,19 @@ void ATC_MiThermometer::init() {
     }
 }
 
-bool ATC_MiThermometer::get_read_settings() const {
+bool ATC_MiThermometer::getReadSettings() const {
     return read_settings;
 }
 
 uint16_t ATC_MiThermometer::getBatteryVoltage() {
     if (connection_mode == Connection_mode::ADVERTISING) {
-        if (getAdvertisingType() == Advertising_Type::ATC1441) {
-            return battery_mv;
-        } else if (getAdvertisingType() == Advertising_Type::PVVX) {
-            return battery_mv;
-        } else if (getAdvertisingType() == Advertising_Type::BTHOME) {
-            return battery_mv;
-        }
-    } else if (connection_mode == Connection_mode::NOTIFICATION) {
+        return battery_mv;
+    } else {
         if (!started_notify_battery) {
             readBatteryLevel();
         }
         return 2000 + (battery_level * (3000 - 2000) / 100);
-    } else if (connection_mode == Connection_mode::CONNECTION) {
-        readBatteryLevel();
-        return 2000 + (battery_level * (3000 - 2000) / 100);
     }
-    return 0;
 }
 
 RF_TX_Power ATC_MiThermometer::getRfTxPower() {
@@ -924,118 +889,69 @@ uint8_t ATC_MiThermometer::getAveragingMeasurementsSteps() {
 }
 
 float ATC_MiThermometer::getRfTxPowerdBm() {
-    switch (getRfTxPower()) {
-        case RF_TX_Power::dBm_3_01:
-            return 3.01;
-        case RF_TX_Power::dBm_2_81:
-            return 2.81;
-        case RF_TX_Power::dBm_2_61:
-            return 2.61;
-        case RF_TX_Power::dBm_2_39:
-            return 2.39;
-        case RF_TX_Power::dBm_1_99:
-            return 1.99;
-        case RF_TX_Power::dBm_1_73:
-            return 1.73;
-        case RF_TX_Power::dBm_1_45:
-            return 1.45;
-        case RF_TX_Power::dBm_1_17:
-            return 1.17;
-        case RF_TX_Power::dBm_0_90:
-            return 0.90;
-        case RF_TX_Power::dBm_0_58:
-            return 0.58;
-        case RF_TX_Power::dBm_0_04:
-            return 0.04;
-        case RF_TX_Power::dBm_n0_14:
-            return -0.14;
-        case RF_TX_Power::dBm_n0_97:
-            return -0.97;
-        case RF_TX_Power::dBm_n1_42:
-            return -1.42;
-        case RF_TX_Power::dBm_n1_89:
-            return -1.89;
-        case RF_TX_Power::dBm_n2_48:
-            return -2.48;
-        case RF_TX_Power::dBm_n3_03:
-            return -3.03;
-        case RF_TX_Power::dBm_n3_61:
-            return -3.61;
-        case RF_TX_Power::dBm_n4_26:
-            return -4.26;
-        case RF_TX_Power::dBm_n5_03:
-            return -5.03;
-        case RF_TX_Power::dBm_n5_81:
-            return -5.81;
-        case RF_TX_Power::dBm_n6_67:
-            return -6.67;
-        case RF_TX_Power::dBm_n7_65:
-            return -7.65;
-        case RF_TX_Power::dBm_n8_65:
-            return -8.65;
-        case RF_TX_Power::dBm_n9_89:
-            return -9.89;
-        case RF_TX_Power::dBm_n11_4:
-            return -11.4;
-        case RF_TX_Power::dBm_n13_29:
-            return -13.29;
-        case RF_TX_Power::dBm_n15_88:
-            return -15.88;
-        case RF_TX_Power::dBm_n19_27:
-            return -19.27;
-        case RF_TX_Power::dBm_n25_18:
-            return -25.18;
-        case RF_TX_Power::dBm_n30:
-            return -30;
-        case RF_TX_Power::dBm_n50:
-            return -50;
-        case RF_TX_Power::dBm_10_46:
-            return 10.46;
-        case RF_TX_Power::dBm_10_29:
-            return 10.29;
-        case RF_TX_Power::dBm_10_01:
-            return 10.01;
-        case RF_TX_Power::dBm_9_81:
-            return 9.81;
-        case RF_TX_Power::dBm_9_48:
-            return 9.48;
-        case RF_TX_Power::dBm_9_24:
-            return 9.24;
-        case RF_TX_Power::dBm_8_97:
-            return 8.97;
-        case RF_TX_Power::dBm_8_73:
-            return 8.73;
-        case RF_TX_Power::dBm_8_44:
-            return 8.44;
-        case RF_TX_Power::dBm_8_13:
-            return 8.13;
-        case RF_TX_Power::dBm_7_79:
-            return 7.79;
-        case RF_TX_Power::dBm_7_41:
-            return 7.41;
-        case RF_TX_Power::dBm_7_02:
-            return 7.02;
-        case RF_TX_Power::dBm_6_60:
-            return 6.60;
-        case RF_TX_Power::dBm_6_14:
-            return 6.14;
-        case RF_TX_Power::dBm_5_65:
-            return 5.65;
-        case RF_TX_Power::dBm_5_13:
-            return 5.13;
-        case RF_TX_Power::dBm_4_57:
-            return 4.57;
-        case RF_TX_Power::dBm_3_94:
-            return 3.94;
-        case RF_TX_Power::dBm_3_23:
-            return 3.23;
-        default:
-            return 0;
+    static const std::map<RF_TX_Power, float> powerMap = {
+            {RF_TX_Power::dBm_3_01,   3.01f},
+            {RF_TX_Power::dBm_2_81,   2.81f},
+            {RF_TX_Power::dBm_2_61,   2.61f},
+            {RF_TX_Power::dBm_2_39,   2.39f},
+            {RF_TX_Power::dBm_1_99,   1.99f},
+            {RF_TX_Power::dBm_1_73,   1.73f},
+            {RF_TX_Power::dBm_1_45,   1.45f},
+            {RF_TX_Power::dBm_1_17,   1.17f},
+            {RF_TX_Power::dBm_0_90,   0.90f},
+            {RF_TX_Power::dBm_0_58,   0.58f},
+            {RF_TX_Power::dBm_0_04,   0.04f},
+            {RF_TX_Power::dBm_n0_14,  -0.14f},
+            {RF_TX_Power::dBm_n0_97,  -0.97f},
+            {RF_TX_Power::dBm_n1_42,  -1.42f},
+            {RF_TX_Power::dBm_n1_89,  -1.89f},
+            {RF_TX_Power::dBm_n2_48,  -2.48f},
+            {RF_TX_Power::dBm_n3_03,  -3.03f},
+            {RF_TX_Power::dBm_n3_61,  -3.61f},
+            {RF_TX_Power::dBm_n4_26,  -4.26f},
+            {RF_TX_Power::dBm_n5_03,  -5.03f},
+            {RF_TX_Power::dBm_n5_81,  -5.81f},
+            {RF_TX_Power::dBm_n6_67,  -6.67f},
+            {RF_TX_Power::dBm_n7_65,  -7.65f},
+            {RF_TX_Power::dBm_n8_65,  -8.65f},
+            {RF_TX_Power::dBm_n9_89,  -9.89f},
+            {RF_TX_Power::dBm_n11_4,  -11.4f},
+            {RF_TX_Power::dBm_n13_29, -13.29f},
+            {RF_TX_Power::dBm_n15_88, -15.88f},
+            {RF_TX_Power::dBm_n19_27, -19.27f},
+            {RF_TX_Power::dBm_n25_18, -25.18f},
+            {RF_TX_Power::dBm_n30,    -30.0f},
+            {RF_TX_Power::dBm_n50,    -50.0f},
+            {RF_TX_Power::dBm_10_46,  10.46f},
+            {RF_TX_Power::dBm_10_29,  10.29f},
+            {RF_TX_Power::dBm_10_01,  10.01f},
+            {RF_TX_Power::dBm_9_81,   9.81f},
+            {RF_TX_Power::dBm_9_48,   9.48f},
+            {RF_TX_Power::dBm_9_24,   9.24f},
+            {RF_TX_Power::dBm_8_97,   8.97f},
+            {RF_TX_Power::dBm_8_73,   8.73f},
+            {RF_TX_Power::dBm_8_44,   8.44f},
+            {RF_TX_Power::dBm_8_13,   8.13f},
+            {RF_TX_Power::dBm_7_79,   7.79f},
+            {RF_TX_Power::dBm_7_41,   7.41f},
+            {RF_TX_Power::dBm_7_02,   7.02f},
+            {RF_TX_Power::dBm_6_60,   6.60f},
+            {RF_TX_Power::dBm_6_14,   6.14f},
+            {RF_TX_Power::dBm_5_65,   5.65f},
+            {RF_TX_Power::dBm_5_13,   5.13f},
+            {RF_TX_Power::dBm_4_57,   4.57f},
+            {RF_TX_Power::dBm_3_94,   3.94f},
+            {RF_TX_Power::dBm_3_23,   3.23f}
+    };
+    auto it = powerMap.find(getRfTxPower());
+    if (it != powerMap.end()) {
+        return it->second;
     }
+    return 0.0f;
 }
 
 uint16_t ATC_MiThermometer::getAdvertisingIntervalMs() {
-    return (uint16_t) ((float) getAdvertisingIntervalSteps() * advertising_interval_step_time_ms);
+    return static_cast<uint16_t>(static_cast<float>(getAdvertisingIntervalSteps()) * advertising_interval_step_time_ms);
 }
 
 uint32_t ATC_MiThermometer::getMeasureIntervalMs() {
@@ -1055,22 +971,23 @@ uint32_t ATC_MiThermometer::getAveragingMeasurementsMs() {
 }
 
 uint16_t ATC_MiThermometer::getAveragingMeasurementsSec() {
-    return getAveragingMeasurementsMs() / 1000;
+    return static_cast<uint16_t>(getAveragingMeasurementsMs() / 1000);
 }
 
-uint8_t *ATC_MiThermometer::parseSettings(ATC_MiThermometer_Settings settingsToParse) {
-    auto *data = new uint8_t[12];
+std::vector<uint8_t> ATC_MiThermometer::parseSettings(const ATC_MiThermometer_Settings &settingsToParse) {
+    std::vector<uint8_t> data(12);
     data[0] = 0x55;
     data[1] = 0x0A;
-    data[2] = settingsToParse.lp_measures << 7 | settingsToParse.tx_measures << 6 | settingsToParse.show_battery << 5 |
-              settingsToParse.temp_F_or_C << 4 | settingsToParse.blinking_time_smile << 3 |
-              settingsToParse.comfort_smiley << 2 |
-              settingsToParse.advertising_type;
-    data[3] = settingsToParse.screen_off << 7 | settingsToParse.long_range << 6 | settingsToParse.bt5phy << 5 |
-              settingsToParse.adv_flags << 4 |
-              settingsToParse.adv_crypto << 3 | settingsToParse.smiley;
-    data[4] = (uint8_t) settingsToParse.temp_offset * 10;
-    data[5] = (uint8_t) settingsToParse.humidity_offset * 10;
+    data[2] = (settingsToParse.lp_measures << 7) | (settingsToParse.tx_measures << 6) |
+              (settingsToParse.show_battery << 5) |
+              (settingsToParse.temp_F_or_C << 4) | (settingsToParse.blinking_time_smile << 3) |
+              (settingsToParse.comfort_smiley << 2) |
+              static_cast<uint8_t>(settingsToParse.advertising_type);
+    data[3] = (settingsToParse.screen_off << 7) | (settingsToParse.long_range << 6) | (settingsToParse.bt5phy << 5) |
+              (settingsToParse.adv_flags << 4) |
+              (settingsToParse.adv_crypto << 3) | static_cast<uint8_t>(settingsToParse.smiley);
+    data[4] = static_cast<uint8_t>(settingsToParse.temp_offset * 10);
+    data[5] = static_cast<uint8_t>(settingsToParse.humidity_offset * 10);
     data[6] = settingsToParse.advertising_interval;
     data[7] = settingsToParse.measure_interval;
     data[8] = static_cast<uint8_t>(settingsToParse.rfTxPower);
@@ -1080,8 +997,9 @@ uint8_t *ATC_MiThermometer::parseSettings(ATC_MiThermometer_Settings settingsToP
     return data;
 }
 
-void ATC_MiThermometer::sendSettings(ATC_MiThermometer_Settings newSettings) {
-    uint8_t attempts = 0;
+void ATC_MiThermometer::sendSettings(const ATC_MiThermometer_Settings &newSettings) {
+    std::lock_guard<std::mutex> lock(bleMutex);
+    int attempts = 0;
     while (!isConnected() && attempts < 5) {
         connect();
         attempts++;
@@ -1091,16 +1009,16 @@ void ATC_MiThermometer::sendSettings(ATC_MiThermometer_Settings newSettings) {
         Serial.println("Failed to connect to device");
         return;
     }
-    if (commandService == nullptr) {
-        connect_to_command_service();
-        if (commandService == nullptr) {
+    if (!commandService) {
+        connectToCommandService();
+        if (!commandService) {
             Serial.println("Command service not found");
             return;
         }
     }
-    if (commandCharacteristic == nullptr) {
-        connect_to_command_characteristic();
-        if (commandCharacteristic == nullptr) {
+    if (!commandCharacteristic) {
+        connectToCommandCharacteristic();
+        if (!commandCharacteristic) {
             Serial.println("Command characteristic not found");
             return;
         }
@@ -1108,7 +1026,8 @@ void ATC_MiThermometer::sendSettings(ATC_MiThermometer_Settings newSettings) {
     received_settings = false;
     if (commandCharacteristic->canNotify()) {
         commandCharacteristic->subscribe(true,
-                                         [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData,
+                                         [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
+                                                const uint8_t *pData,
                                                 size_t length, bool isNotify) {
                                              this->notifySettingsCallback(pBLERemoteCharacteristic, pData, length,
                                                                           isNotify);
@@ -1117,9 +1036,8 @@ void ATC_MiThermometer::sendSettings(ATC_MiThermometer_Settings newSettings) {
         Serial.println("Command characteristic cannot notify");
         return;
     }
-    uint8_t *data = parseSettings(newSettings);
-    sendCommand(data, 12);
-    delete[] data;
+    std::vector<uint8_t> data = parseSettings(newSettings);
+    sendCommand(data);
     uint32_t start = millis();
     while (!received_settings && millis() - start < 5000) {
         delay(100);
@@ -1142,221 +1060,71 @@ ATC_MiThermometer_Settings ATC_MiThermometer::getSettings() {
 }
 
 void ATC_MiThermometer::setRfTxPowerdBm(float power) {
-    float min_diff = 1000;
-    RF_TX_Power closest_power = RF_TX_Power::dBm_3_01;
-    if (abs(power - 3.01) < min_diff) {
-        min_diff = abs(power - 3.01f);
-        closest_power = RF_TX_Power::dBm_3_01;
-    }
-    if (abs(power - 2.81) < min_diff) {
-        min_diff = abs(power - 2.81f);
-        closest_power = RF_TX_Power::dBm_2_81;
-    }
-    if (abs(power - 2.61) < min_diff) {
-        min_diff = abs(power - 2.61f);
-        closest_power = RF_TX_Power::dBm_2_61;
-    }
-    if (abs(power - 2.39) < min_diff) {
-        min_diff = abs(power - 2.39f);
-        closest_power = RF_TX_Power::dBm_2_39;
-    }
-    if (abs(power - 1.99) < min_diff) {
-        min_diff = abs(power - 1.99f);
-        closest_power = RF_TX_Power::dBm_1_99;
-    }
-    if (abs(power - 1.73) < min_diff) {
-        min_diff = abs(power - 1.73f);
-        closest_power = RF_TX_Power::dBm_1_73;
-    }
-    if (abs(power - 1.45) < min_diff) {
-        min_diff = abs(power - 1.45f);
-        closest_power = RF_TX_Power::dBm_1_45;
-    }
-    if (abs(power - 1.17) < min_diff) {
-        min_diff = abs(power - 1.17f);
-        closest_power = RF_TX_Power::dBm_1_17;
-    }
-    if (abs(power - 0.90) < min_diff) {
-        min_diff = abs(power - 0.90f);
-        closest_power = RF_TX_Power::dBm_0_90;
-    }
-    if (abs(power - 0.58) < min_diff) {
-        min_diff = abs(power - 0.58f);
-        closest_power = RF_TX_Power::dBm_0_58;
-    }
-    if (abs(power - 0.04) < min_diff) {
-        min_diff = abs(power - 0.04f);
-        closest_power = RF_TX_Power::dBm_0_04;
-    }
-    if (abs(power + 0.14) < min_diff) {
-        min_diff = abs(power + 0.14f);
-        closest_power = RF_TX_Power::dBm_n0_14;
-    }
-    if (abs(power + 0.97) < min_diff) {
-        min_diff = abs(power + 0.97f);
-        closest_power = RF_TX_Power::dBm_n0_97;
-    }
-    if (abs(power + 1.42) < min_diff) {
-        min_diff = abs(power + 1.42f);
-        closest_power = RF_TX_Power::dBm_n1_42;
-    }
-    if (abs(power + 1.89) < min_diff) {
-        min_diff = abs(power + 1.89f);
-        closest_power = RF_TX_Power::dBm_n1_89;
-    }
-    if (abs(power + 2.48) < min_diff) {
-        min_diff = abs(power + 2.48f);
-        closest_power = RF_TX_Power::dBm_n2_48;
-    }
-    if (abs(power + 3.03) < min_diff) {
-        min_diff = abs(power + 3.03f);
-        closest_power = RF_TX_Power::dBm_n3_03;
-    }
-    if (abs(power + 3.61) < min_diff) {
-        min_diff = abs(power + 3.61f);
-        closest_power = RF_TX_Power::dBm_n3_61;
-    }
-    if (abs(power + 4.26) < min_diff) {
-        min_diff = abs(power + 4.26f);
-        closest_power = RF_TX_Power::dBm_n4_26;
-    }
-    if (abs(power + 5.03) < min_diff) {
-        min_diff = abs(power + 5.03f);
-        closest_power = RF_TX_Power::dBm_n5_03;
-    }
-    if (abs(power + 5.81) < min_diff) {
-        min_diff = abs(power + 5.81f);
-        closest_power = RF_TX_Power::dBm_n5_81;
-    }
-    if (abs(power + 6.67) < min_diff) {
-        min_diff = abs(power + 6.67f);
-        closest_power = RF_TX_Power::dBm_n6_67;
-    }
-    if (abs(power + 7.65) < min_diff) {
-        min_diff = abs(power + 7.65f);
-        closest_power = RF_TX_Power::dBm_n7_65;
-    }
-    if (abs(power + 8.65) < min_diff) {
-        min_diff = abs(power + 8.65f);
-        closest_power = RF_TX_Power::dBm_n8_65;
-    }
-    if (abs(power + 9.89) < min_diff) {
-        min_diff = abs(power + 9.89f);
-        closest_power = RF_TX_Power::dBm_n9_89;
-    }
-    if (abs(power + 11.4) < min_diff) {
-        min_diff = abs(power + 11.4f);
-        closest_power = RF_TX_Power::dBm_n11_4;
-    }
-    if (abs(power + 13.29) < min_diff) {
-        min_diff = abs(power + 13.29f);
-        closest_power = RF_TX_Power::dBm_n13_29;
-    }
-    if (abs(power + 15.88) < min_diff) {
-        min_diff = abs(power + 15.88f);
-        closest_power = RF_TX_Power::dBm_n15_88;
-    }
-    if (abs(power + 19.27) < min_diff) {
-        min_diff = abs(power + 19.27f);
-        closest_power = RF_TX_Power::dBm_n19_27;
-    }
-    if (abs(power + 25.18) < min_diff) {
-        min_diff = abs(power + 25.18f);
-        closest_power = RF_TX_Power::dBm_n25_18;
-    }
-    if (abs(power + 30) < min_diff) {
-        min_diff = abs(power + 30);
-        closest_power = RF_TX_Power::dBm_n30;
-    }
-    if (abs(power + 50) < min_diff) {
-        min_diff = abs(power + 50);
-        closest_power = RF_TX_Power::dBm_n50;
-    }
-    if (abs(power - 10.46) < min_diff) {
-        min_diff = abs(power - 10.46f);
-        closest_power = RF_TX_Power::dBm_10_46;
-    }
-    if (abs(power - 10.29) < min_diff) {
-        min_diff = abs(power - 10.29f);
-        closest_power = RF_TX_Power::dBm_10_29;
-    }
-    if (abs(power - 10.01) < min_diff) {
-        min_diff = abs(power - 10.01f);
-        closest_power = RF_TX_Power::dBm_10_01;
-    }
-    if (abs(power - 9.81) < min_diff) {
-        min_diff = abs(power - 9.81f);
-        closest_power = RF_TX_Power::dBm_9_81;
-    }
-    if (abs(power - 9.48) < min_diff) {
-        min_diff = abs(power - 9.48f);
-        closest_power = RF_TX_Power::dBm_9_48;
-    }
-    if (abs(power - 9.24) < min_diff) {
-        min_diff = abs(power - 9.24f);
-        closest_power = RF_TX_Power::dBm_9_24;
-    }
-    if (abs(power - 8.97) < min_diff) {
-        min_diff = abs(power - 8.97f);
-        closest_power = RF_TX_Power::dBm_8_97;
-    }
-    if (abs(power - 8.73) < min_diff) {
-        min_diff = abs(power - 8.73f);
-        closest_power = RF_TX_Power::dBm_8_73;
-    }
-    if (abs(power - 8.44) < min_diff) {
-        min_diff = abs(power - 8.44f);
-        closest_power = RF_TX_Power::dBm_8_44;
-    }
-    if (abs(power - 8.13) < min_diff) {
-        min_diff = abs(power - 8.13f);
-        closest_power = RF_TX_Power::dBm_8_13;
-    }
-    if (abs(power - 7.79) < min_diff) {
-        min_diff = abs(power - 7.79f);
-        closest_power = RF_TX_Power::dBm_7_79;
-    }
-    if (abs(power - 7.41) < min_diff) {
-        min_diff = abs(power - 7.41f);
-        closest_power = RF_TX_Power::dBm_7_41;
-    }
-    if (abs(power - 7.02) < min_diff) {
-        min_diff = abs(power - 7.02f);
-        closest_power = RF_TX_Power::dBm_7_02;
-    }
-    if (abs(power - 6.60) < min_diff) {
-        min_diff = abs(power - 6.60f);
-        closest_power = RF_TX_Power::dBm_6_60;
-    }
-    if (abs(power - 6.14) < min_diff) {
-        min_diff = abs(power - 6.14f);
-        closest_power = RF_TX_Power::dBm_6_14;
-    }
-    if (abs(power - 5.65) < min_diff) {
-        min_diff = abs(power - 5.65f);
-        closest_power = RF_TX_Power::dBm_5_65;
-    }
-    if (abs(power - 5.13) < min_diff) {
-        min_diff = abs(power - 5.13f);
-        closest_power = RF_TX_Power::dBm_5_13;
-    }
-    if (abs(power - 4.57) < min_diff) {
-        min_diff = abs(power - 4.57f);
-        closest_power = RF_TX_Power::dBm_4_57;
-    }
-    if (abs(power - 3.94) < min_diff) {
-        min_diff = abs(power - 3.94f);
-        closest_power = RF_TX_Power::dBm_3_94;
-    }
-    if (abs(power - 3.23) < min_diff) {
-        closest_power = RF_TX_Power::dBm_3_23;
-    }
-    setRfTxPower(closest_power);
+    static const std::map<float, RF_TX_Power> powerMap = {
+            {3.01f,   RF_TX_Power::dBm_3_01},
+            {2.81f,   RF_TX_Power::dBm_2_81},
+            {2.61f,   RF_TX_Power::dBm_2_61},
+            {2.39f,   RF_TX_Power::dBm_2_39},
+            {1.99f,   RF_TX_Power::dBm_1_99},
+            {1.73f,   RF_TX_Power::dBm_1_73},
+            {1.45f,   RF_TX_Power::dBm_1_45},
+            {1.17f,   RF_TX_Power::dBm_1_17},
+            {0.90f,   RF_TX_Power::dBm_0_90},
+            {0.58f,   RF_TX_Power::dBm_0_58},
+            {0.04f,   RF_TX_Power::dBm_0_04},
+            {-0.14f,  RF_TX_Power::dBm_n0_14},
+            {-0.97f,  RF_TX_Power::dBm_n0_97},
+            {-1.42f,  RF_TX_Power::dBm_n1_42},
+            {-1.89f,  RF_TX_Power::dBm_n1_89},
+            {-2.48f,  RF_TX_Power::dBm_n2_48},
+            {-3.03f,  RF_TX_Power::dBm_n3_03},
+            {-3.61f,  RF_TX_Power::dBm_n3_61},
+            {-4.26f,  RF_TX_Power::dBm_n4_26},
+            {-5.03f,  RF_TX_Power::dBm_n5_03},
+            {-5.81f,  RF_TX_Power::dBm_n5_81},
+            {-6.67f,  RF_TX_Power::dBm_n6_67},
+            {-7.65f,  RF_TX_Power::dBm_n7_65},
+            {-8.65f,  RF_TX_Power::dBm_n8_65},
+            {-9.89f,  RF_TX_Power::dBm_n9_89},
+            {-11.4f,  RF_TX_Power::dBm_n11_4},
+            {-13.29f, RF_TX_Power::dBm_n13_29},
+            {-15.88f, RF_TX_Power::dBm_n15_88},
+            {-19.27f, RF_TX_Power::dBm_n19_27},
+            {-25.18f, RF_TX_Power::dBm_n25_18},
+            {-30.0f,  RF_TX_Power::dBm_n30},
+            {-50.0f,  RF_TX_Power::dBm_n50},
+            {10.46f,  RF_TX_Power::dBm_10_46},
+            {10.29f,  RF_TX_Power::dBm_10_29},
+            {10.01f,  RF_TX_Power::dBm_10_01},
+            {9.81f,   RF_TX_Power::dBm_9_81},
+            {9.48f,   RF_TX_Power::dBm_9_48},
+            {9.24f,   RF_TX_Power::dBm_9_24},
+            {8.97f,   RF_TX_Power::dBm_8_97},
+            {8.73f,   RF_TX_Power::dBm_8_73},
+            {8.44f,   RF_TX_Power::dBm_8_44},
+            {8.13f,   RF_TX_Power::dBm_8_13},
+            {7.79f,   RF_TX_Power::dBm_7_79},
+            {7.41f,   RF_TX_Power::dBm_7_41},
+            {7.02f,   RF_TX_Power::dBm_7_02},
+            {6.60f,   RF_TX_Power::dBm_6_60},
+            {6.14f,   RF_TX_Power::dBm_6_14},
+            {5.65f,   RF_TX_Power::dBm_5_65},
+            {5.13f,   RF_TX_Power::dBm_5_13},
+            {4.57f,   RF_TX_Power::dBm_4_57},
+            {3.94f,   RF_TX_Power::dBm_3_94},
+            {3.23f,   RF_TX_Power::dBm_3_23}
+    };
+    auto closest = std::min_element(powerMap.begin(), powerMap.end(),
+                                    [power](const std::pair<float, RF_TX_Power> &a,
+                                            const std::pair<float, RF_TX_Power> &b) {
+                                        return std::abs(a.first - power) < std::abs(b.first - power);
+                                    });
+    setRfTxPower(closest->second);
 }
 
 void ATC_MiThermometer::setLowPowerMeasures(bool lowPowerMeasures) {
     ATC_MiThermometer_Settings newSettings = getSettings();
-    settings.lp_measures = lowPowerMeasures;
+    newSettings.lp_measures = lowPowerMeasures;
     sendSettings(newSettings);
 }
 
@@ -1457,11 +1225,12 @@ void ATC_MiThermometer::setAdvertisingIntervalSteps(uint8_t advertisingIntervalS
 }
 
 void ATC_MiThermometer::setAdvertisingIntervalMs(uint16_t advertisingIntervalMs) {
-    setAdvertisingIntervalSteps((uint8_t) ((float) advertisingIntervalMs / advertising_interval_step_time_ms));
+    setAdvertisingIntervalSteps(
+            static_cast<uint8_t>(static_cast<float>(advertisingIntervalMs) / advertising_interval_step_time_ms));
 }
 
 void ATC_MiThermometer::setMeasureIntervalMs(uint32_t measureIntervalMs) {
-    setMeasureIntervalSteps(measureIntervalMs / getAdvertisingIntervalMs());
+    setMeasureIntervalSteps(static_cast<uint8_t>(measureIntervalMs / getAdvertisingIntervalMs()));
 }
 
 void ATC_MiThermometer::setMeasureIntervalSteps(uint8_t measureIntervalSteps) {
@@ -1477,7 +1246,7 @@ void ATC_MiThermometer::setConnectLatencySteps(uint8_t connectLatencySteps) {
 }
 
 void ATC_MiThermometer::setConnectLatencyMs(uint16_t connectLatencyMs) {
-    setConnectLatencySteps(connectLatencyMs / connect_latency_step_time_ms);
+    setConnectLatencySteps(static_cast<uint8_t>(connectLatencyMs / connect_latency_step_time_ms));
 }
 
 void ATC_MiThermometer::setLcdUpdateIntervalSteps(uint8_t lcdUpdateIntervalSteps) {
@@ -1487,7 +1256,7 @@ void ATC_MiThermometer::setLcdUpdateIntervalSteps(uint8_t lcdUpdateIntervalSteps
 }
 
 void ATC_MiThermometer::setLcdUpdateIntervalMs(uint16_t lcdUpdateIntervalMs) {
-    setLcdUpdateIntervalSteps(lcdUpdateIntervalMs / lcd_update_interval_step_time_ms);
+    setLcdUpdateIntervalSteps(static_cast<uint8_t>(lcdUpdateIntervalMs / lcd_update_interval_step_time_ms));
 }
 
 void ATC_MiThermometer::setAveragingMeasurementsSteps(uint8_t averagingMeasurementsSteps) {
@@ -1497,7 +1266,7 @@ void ATC_MiThermometer::setAveragingMeasurementsSteps(uint8_t averagingMeasureme
 }
 
 void ATC_MiThermometer::setAveragingMeasurementsMs(uint32_t averagingMeasurementsMs) {
-    setAveragingMeasurementsSteps(averagingMeasurementsMs / getMeasureIntervalMs());
+    setAveragingMeasurementsSteps(static_cast<uint8_t>(averagingMeasurementsMs / getMeasureIntervalMs()));
 }
 
 void ATC_MiThermometer::setAveragingMeasurementsSec(uint16_t averagingMeasurementsSec) {
@@ -1505,15 +1274,16 @@ void ATC_MiThermometer::setAveragingMeasurementsSec(uint16_t averagingMeasuremen
 }
 
 void ATC_MiThermometer::resetSettings() {
-    uint8_t data[1] = {0x56};
-    sendCommand(data, 1);
+    std::vector<uint8_t> data = {0x56};
+    sendCommand(data);
     read_settings = false;
     received_settings = false;
     readSettings();
 }
 
 void ATC_MiThermometer::setClock(time_t time) {
-    uint8_t attempts = 0;
+    std::lock_guard<std::mutex> lock(bleMutex);
+    int attempts = 0;
     while (!isConnected() && attempts < 5) {
         connect();
         attempts++;
@@ -1523,42 +1293,42 @@ void ATC_MiThermometer::setClock(time_t time) {
         Serial.println("Failed to connect to device");
         return;
     }
-    if (commandService == nullptr) {
-        connect_to_command_service();
-        if (commandService == nullptr) {
+    if (!commandService) {
+        connectToCommandService();
+        if (!commandService) {
             Serial.println("Command service not found");
             return;
         }
     }
-    if (commandCharacteristic == nullptr) {
-        connect_to_command_characteristic();
-        if (commandCharacteristic == nullptr) {
+    if (!commandCharacteristic) {
+        connectToCommandCharacteristic();
+        if (!commandCharacteristic) {
             Serial.println("Command characteristic not found");
             return;
         }
     }
-    uint8_t data[5];
+    std::vector<uint8_t> data(5);
     data[0] = 0x23;
-    data[1] = (uint8_t) (time & 0xFF);
-    data[2] = (uint8_t) ((time >> 8) & 0xFF);
-    data[3] = (uint8_t) ((time >> 16) & 0xFF);
-    data[4] = (uint8_t) ((time >> 24) & 0xFF);
-    sendCommand(data, 5);
+    data[1] = static_cast<uint8_t>(time & 0xFF);
+    data[2] = static_cast<uint8_t>((time >> 8) & 0xFF);
+    data[3] = static_cast<uint8_t>((time >> 16) & 0xFF);
+    data[4] = static_cast<uint8_t>((time >> 24) & 0xFF);
+    sendCommand(data);
 }
 
 void ATC_MiThermometer::setClock(uint8_t hours, uint8_t minutes, uint8_t seconds, uint8_t day, uint8_t month,
                                  uint16_t year) {
-    tm time{};
-    time.tm_hour = hours;
-    time.tm_min = minutes;
-    time.tm_sec = seconds;
-    time.tm_mday = day;
-    time.tm_mon = month - 1;
-    time.tm_year = year - 1900;
-    setClock(mktime(&time));
+    tm timeStruct{};
+    timeStruct.tm_hour = hours;
+    timeStruct.tm_min = minutes;
+    timeStruct.tm_sec = seconds;
+    timeStruct.tm_mday = day;
+    timeStruct.tm_mon = month - 1;
+    timeStruct.tm_year = year - 1900;
+    setClock(mktime(&timeStruct));
 }
 
-Connection_mode ATC_MiThermometer::getConnectionMode() {
+Connection_mode ATC_MiThermometer::getConnectionMode() const {
     return connection_mode;
 }
 
@@ -1569,7 +1339,7 @@ void ATC_MiThermometer::setConnectionMode(Connection_mode new_connection_mode) {
     if (connection_mode == Connection_mode::ADVERTISING) {
         connect();
         if (new_connection_mode == Connection_mode::NOTIFICATION) {
-            begin_notify();
+            beginNotify();
         } else if (new_connection_mode == Connection_mode::CONNECTION) {
             connect();
             readBatteryLevel();
@@ -1578,7 +1348,7 @@ void ATC_MiThermometer::setConnectionMode(Connection_mode new_connection_mode) {
             readTemperaturePrecise();
         }
     } else if (connection_mode == Connection_mode::NOTIFICATION) {
-        stop_notify();
+        stopNotify();
         if (new_connection_mode == Connection_mode::ADVERTISING) {
             disconnect();
         } else if (new_connection_mode == Connection_mode::CONNECTION) {
@@ -1592,39 +1362,49 @@ void ATC_MiThermometer::setConnectionMode(Connection_mode new_connection_mode) {
         if (new_connection_mode == Connection_mode::ADVERTISING) {
             disconnect();
         } else if (new_connection_mode == Connection_mode::NOTIFICATION) {
-            begin_notify();
+            beginNotify();
         }
     }
     connection_mode = new_connection_mode;
 }
 
-void ATC_MiThermometer::stop_notify_temp() {
-    if (temperatureCharacteristic != nullptr) {
+void ATC_MiThermometer::stopNotifyTemp() {
+    if (temperatureCharacteristic) {
         temperatureCharacteristic->unsubscribe();
     }
 }
 
-void ATC_MiThermometer::stop_notify_temp_precise() {
-    if (temperaturePreciseCharacteristic != nullptr) {
+void ATC_MiThermometer::stopNotifyTempPrecise() {
+    if (temperaturePreciseCharacteristic) {
         temperaturePreciseCharacteristic->unsubscribe();
     }
 }
 
-void ATC_MiThermometer::stop_notify_humidity() {
-    if (humidityCharacteristic != nullptr) {
+void ATC_MiThermometer::stopNotifyHumidity() {
+    if (humidityCharacteristic) {
         humidityCharacteristic->unsubscribe();
     }
 }
 
-void ATC_MiThermometer::stop_notify_battery() {
-    if (batteryCharacteristic != nullptr) {
+void ATC_MiThermometer::stopNotifyBattery() {
+    if (batteryCharacteristic) {
         batteryCharacteristic->unsubscribe();
     }
 }
 
-void ATC_MiThermometer::stop_notify() {
-    stop_notify_temp();
-    stop_notify_temp_precise();
-    stop_notify_humidity();
-    stop_notify_battery();
+void ATC_MiThermometer::stopNotify() {
+    stopNotifyTemp();
+    stopNotifyTempPrecise();
+    stopNotifyHumidity();
+    stopNotifyBattery();
+}
+
+void ATC_MiThermometer::readCharacteristicValue(NimBLERemoteCharacteristic *characteristic,
+                                                std::function<void(const std::string &)> callback) {
+    if (!characteristic) {
+        Serial.println("Characteristic is null, cannot read value");
+        return;
+    }
+    std::string value = characteristic->readValue();
+    callback(value);
 }

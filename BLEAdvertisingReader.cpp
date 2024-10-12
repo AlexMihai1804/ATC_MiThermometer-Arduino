@@ -26,9 +26,9 @@ void BLEAdvertisingReader::addThermometer(ATC_MiThermometer *thermometer) {
 }
 
 void BLEAdvertisingReader::removeThermometer(ATC_MiThermometer *thermometer) {
-    auto it = std::find(thermometers.begin(), thermometers.end(), thermometer);
+    auto it = std::remove(thermometers.begin(), thermometers.end(), thermometer);
     if (it != thermometers.end()) {
-        thermometers.erase(it);
+        thermometers.erase(it, thermometers.end());
         Serial.printf("Removed thermometer with address: %s\n", thermometer->getAddress());
     }
 }
@@ -49,28 +49,20 @@ void BLEAdvertisingReader::AdvertisedDeviceCallbacks::onResult(NimBLEAdvertisedD
     if (deviceAddress.size() < 2) {
         return;
     }
-    char firstChar = std::tolower(deviceAddress[0]);
-    char secondChar = std::tolower(deviceAddress[1]);
-    if (!(firstChar == 'a' && secondChar == '4')) {
+    if (!(std::tolower(deviceAddress[0]) == 'a' && std::tolower(deviceAddress[1]) == '4')) {
         return;
     }
     for (ATC_MiThermometer *thermometer: parentReader.thermometers) {
-        if (thermometer == nullptr)
+        if (!thermometer)
             continue;
         std::string thermometerAddress = thermometer->getAddress();
         if (deviceAddress.length() != thermometerAddress.length()) {
             continue;
         }
 
-        bool match = true;
-        for (size_t i = 0; i < deviceAddress.length(); i++) {
-            if (std::tolower(deviceAddress[i]) != std::tolower(thermometerAddress[i])) {
-                match = false;
-                break;
-            }
-        }
-        if (match) {
-            uint8_t *payload = advertisedDevice->getPayload();
+        if (std::equal(deviceAddress.begin(), deviceAddress.end(), thermometerAddress.begin(),
+                       [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+            const uint8_t *payload = advertisedDevice->getPayload();
             size_t payloadLength = advertisedDevice->getPayloadLength();
             thermometer->parseAdvertisingData(payload, payloadLength);
             return;

@@ -24,7 +24,7 @@ private:
 
     class AdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
     public:
-        AdvertisedDeviceCallbacks(BLEAdvertisingReader &reader);
+        explicit AdvertisedDeviceCallbacks(BLEAdvertisingReader &reader);
 
         void onResult(NimBLEAdvertisedDevice *advertisedDevice) override;
 

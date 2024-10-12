@@ -1,5 +1,5 @@
-#ifndef ATC_MI_TERMOMETER_ESP32_ATC_MITHERMOMETER_STRUCTS_H
-#define ATC_MI_TERMOMETER_ESP32_ATC_MITHERMOMETER_STRUCTS_H
+#ifndef ATC_MI_THERMOMETER_STRUCTS_H
+#define ATC_MI_THERMOMETER_STRUCTS_H
 
 #include <cstdint>
 #include "ATC_MiThermometer_enums.h"
@@ -30,4 +30,5 @@ struct ATC_MiThermometer_Settings {
     HW_VERSION_ID hw_version;
     uint8_t averaging_measurements;
 };
-#endif
+
+#endif // ATC_MI_THERMOMETER_STRUCTS_H

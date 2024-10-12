@@ -7,63 +7,20 @@
 #include "ATC_MiThermometer_structs.h"
 #include "ATC_MiThermometer_enums.h"
 #include <ctime>
+#include <vector>
+#include <map>
 
-const float advertising_interval_step_time_ms = 62.5;
-const uint8_t connect_latency_step_time_ms = 20;
-const uint8_t lcd_update_interval_step_time_ms = 50;
+constexpr float advertising_interval_step_time_ms = 62.5f;
+constexpr uint8_t connect_latency_step_time_ms = 20;
+constexpr uint8_t lcd_update_interval_step_time_ms = 50;
 
 class ATC_MiThermometer {
-private:
-    const char *address;
-    NimBLEClient *pClient;
-    NimBLERemoteService *environmentService;
-    NimBLERemoteService *batteryService;
-    NimBLERemoteService *commandService;
-    NimBLERemoteCharacteristic *temperatureCharacteristic;
-    NimBLERemoteCharacteristic *temperaturePreciseCharacteristic;
-    NimBLERemoteCharacteristic *humidityCharacteristic;
-    NimBLERemoteCharacteristic *batteryCharacteristic;
-    NimBLERemoteCharacteristic *commandCharacteristic;
-    bool received_settings;
-    bool read_settings;
-    bool started_notify_temp;
-    bool started_notify_temp_precise;
-    bool started_notify_humidity;
-    bool started_notify_battery;
-    float temperature;
-    float temperature_precise;
-    float humidity;
-    uint16_t battery_mv;
-    uint8_t battery_level;
-    ATC_MiThermometer_Settings settings{};
-    Connection_mode connection_mode;
-
-    // Callback-uri
-    void notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length,
-                                   bool isNotify);
-
-    void notifyTempCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length,
-                            bool isNotify);
-
-    void notifyHumidityCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length,
-                                bool isNotify);
-
-    void notifyBatteryCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length,
-                               bool isNotify);
-
-    void notifySettingsCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length,
-                                bool isNotify);
-
-    void parseAdvertisingDataATC1441(uint8_t *data, size_t length);
-
-    void parseAdvertisingDataPVVX(uint8_t *data, size_t length);
-
-    void parseAdvertisingDataBTHOME(uint8_t *data, size_t length);
-
 public:
-    ATC_MiThermometer(const char *address, Connection_mode connection_mode = ADVERTISING);
+    ATC_MiThermometer(const char *address, Connection_mode connection_mode = Connection_mode::ADVERTISING);
 
-    Connection_mode getConnectionMode();
+    ~ATC_MiThermometer();
+
+    Connection_mode getConnectionMode() const;
 
     void setConnectionMode(Connection_mode new_connection_mode);
 
@@ -75,47 +32,31 @@ public:
 
     void readSettings();
 
-    bool isConnected();
+    bool isConnected() const;
 
-    void begin_notify_temp();
+    void beginNotifyTemp();
 
-    void stop_notify_temp();
+    void stopNotifyTemp();
 
-    void begin_notify_temp_precise();
+    void beginNotifyTempPrecise();
 
-    void stop_notify_temp_precise();
+    void stopNotifyTempPrecise();
 
-    void begin_notify_humidity();
+    void beginNotifyHumidity();
 
-    void stop_notify_humidity();
+    void stopNotifyHumidity();
 
-    void begin_notify_battery();
+    void beginNotifyBattery();
 
-    void stop_notify_battery();
+    void stopNotifyBattery();
 
-    void connect_to_environment_service();
+    void connectToAllServices();
 
-    void connect_to_battery_service();
+    void connectToAllCharacteristics();
 
-    void connect_to_command_service();
+    void beginNotify();
 
-    void connect_to_temperature_characteristic();
-
-    void connect_to_temperature_precise_characteristic();
-
-    void connect_to_humidity_characteristic();
-
-    void connect_to_battery_characteristic();
-
-    void connect_to_command_characteristic();
-
-    void connect_to_all_services();
-
-    void connect_to_all_characteristics();
-
-    void begin_notify();
-
-    void stop_notify();
+    void stopNotify();
 
     float getTemperature();
 
@@ -133,15 +74,15 @@ public:
 
     void readBatteryLevel();
 
-    void sendCommand(uint8_t *data, size_t length);
+    void sendCommand(const std::vector<uint8_t> &data);
 
     Advertising_Type getAdvertisingType();
 
-    void parseAdvertisingData(uint8_t *data, size_t length);
+    void parseAdvertisingData(const uint8_t *data, size_t length);
 
-    char *getAddress();
+    const char *getAddress() const;
 
-    bool get_read_settings() const;
+    bool getReadSettings() const;
 
     uint16_t getBatteryVoltage();
 
@@ -263,9 +204,9 @@ public:
 
     void setAveragingMeasurementsSec(uint16_t averagingMeasurementsSec);
 
-    uint8_t *parseSettings(ATC_MiThermometer_Settings settingsToParse);
+    std::vector<uint8_t> parseSettings(const ATC_MiThermometer_Settings &settingsToParse);
 
-    void sendSettings(ATC_MiThermometer_Settings settings);
+    void sendSettings(const ATC_MiThermometer_Settings &settings);
 
     ATC_MiThermometer_Settings getSettings();
 
@@ -274,6 +215,75 @@ public:
     void setClock(uint8_t hours, uint8_t minutes, uint8_t seconds, uint8_t day, uint8_t month, uint16_t year);
 
     void setClock(time_t time);
+
+private:
+    const char *address;
+    NimBLEClient *pClient;
+    NimBLERemoteService *environmentService;
+    NimBLERemoteService *batteryService;
+    NimBLERemoteService *commandService;
+    NimBLERemoteCharacteristic *temperatureCharacteristic;
+    NimBLERemoteCharacteristic *temperaturePreciseCharacteristic;
+    NimBLERemoteCharacteristic *humidityCharacteristic;
+    NimBLERemoteCharacteristic *batteryCharacteristic;
+    NimBLERemoteCharacteristic *commandCharacteristic;
+    bool received_settings;
+    bool read_settings;
+    bool started_notify_temp;
+    bool started_notify_temp_precise;
+    bool started_notify_humidity;
+    bool started_notify_battery;
+    float temperature;
+    float temperature_precise;
+    float humidity;
+    uint16_t battery_mv;
+    uint8_t battery_level;
+    ATC_MiThermometer_Settings settings;
+    Connection_mode connection_mode;
+
+    void
+    notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData, size_t length,
+                              bool isNotify);
+
+    void notifyTempCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData, size_t length,
+                            bool isNotify);
+
+    void
+    notifyHumidityCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData, size_t length,
+                           bool isNotify);
+
+    void
+    notifyBatteryCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData, size_t length,
+                          bool isNotify);
+
+    void
+    notifySettingsCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData, size_t length,
+                           bool isNotify);
+
+    void parseAdvertisingDataATC1441(const uint8_t *data, size_t length);
+
+    void parseAdvertisingDataPVVX(const uint8_t *data, size_t length);
+
+    void parseAdvertisingDataBTHOME(const uint8_t *data, size_t length);
+
+    void connectToEnvironmentService();
+
+    void connectToBatteryService();
+
+    void connectToCommandService();
+
+    void connectToTemperatureCharacteristic();
+
+    void connectToTemperaturePreciseCharacteristic();
+
+    void connectToHumidityCharacteristic();
+
+    void connectToBatteryCharacteristic();
+
+    void connectToCommandCharacteristic();
+
+    void readCharacteristicValue(NimBLERemoteCharacteristic *characteristic,
+                                 std::function<void(const std::string &)> callback);
 };
 
 #endif // ATC_MI_THERMOMETER_NIMBLE_H
