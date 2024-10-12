@@ -63,6 +63,10 @@ private:
 public:
     ATC_MiThermometer(const char *address, Connection_mode connection_mode = ADVERTISING);
 
+    Connection_mode getConnectionMode();
+
+    void setConnectionMode(Connection_mode new_connection_mode);
+
     void init();
 
     void connect();
@@ -75,11 +79,19 @@ public:
 
     void begin_notify_temp();
 
+    void stop_notify_temp();
+
     void begin_notify_temp_precise();
+
+    void stop_notify_temp_precise();
 
     void begin_notify_humidity();
 
+    void stop_notify_humidity();
+
     void begin_notify_battery();
+
+    void stop_notify_battery();
 
     void connect_to_environment_service();
 
@@ -102,6 +114,8 @@ public:
     void connect_to_all_characteristics();
 
     void begin_notify();
+
+    void stop_notify();
 
     float getTemperature();
 

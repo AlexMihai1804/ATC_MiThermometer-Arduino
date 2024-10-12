@@ -1557,3 +1557,74 @@ void ATC_MiThermometer::setClock(uint8_t hours, uint8_t minutes, uint8_t seconds
     time.tm_year = year - 1900;
     setClock(mktime(&time));
 }
+
+Connection_mode ATC_MiThermometer::getConnectionMode() {
+    return connection_mode;
+}
+
+void ATC_MiThermometer::setConnectionMode(Connection_mode new_connection_mode) {
+    if (connection_mode == new_connection_mode) {
+        return;
+    }
+    if (connection_mode == Connection_mode::ADVERTISING) {
+        connect();
+        if (new_connection_mode == Connection_mode::NOTIFICATION) {
+            begin_notify();
+        } else if (new_connection_mode == Connection_mode::CONNECTION) {
+            connect();
+            readBatteryLevel();
+            readHumidity();
+            readTemperature();
+            readTemperaturePrecise();
+        }
+    } else if (connection_mode == Connection_mode::NOTIFICATION) {
+        stop_notify();
+        if (new_connection_mode == Connection_mode::ADVERTISING) {
+            disconnect();
+        } else if (new_connection_mode == Connection_mode::CONNECTION) {
+            connect();
+            readBatteryLevel();
+            readHumidity();
+            readTemperature();
+            readTemperaturePrecise();
+        }
+    } else if (connection_mode == Connection_mode::CONNECTION) {
+        if (new_connection_mode == Connection_mode::ADVERTISING) {
+            disconnect();
+        } else if (new_connection_mode == Connection_mode::NOTIFICATION) {
+            begin_notify();
+        }
+    }
+    connection_mode = new_connection_mode;
+}
+
+void ATC_MiThermometer::stop_notify_temp() {
+    if (temperatureCharacteristic != nullptr) {
+        temperatureCharacteristic->unsubscribe();
+    }
+}
+
+void ATC_MiThermometer::stop_notify_temp_precise() {
+    if (temperaturePreciseCharacteristic != nullptr) {
+        temperaturePreciseCharacteristic->unsubscribe();
+    }
+}
+
+void ATC_MiThermometer::stop_notify_humidity() {
+    if (humidityCharacteristic != nullptr) {
+        humidityCharacteristic->unsubscribe();
+    }
+}
+
+void ATC_MiThermometer::stop_notify_battery() {
+    if (batteryCharacteristic != nullptr) {
+        batteryCharacteristic->unsubscribe();
+    }
+}
+
+void ATC_MiThermometer::stop_notify() {
+    stop_notify_temp();
+    stop_notify_temp_precise();
+    stop_notify_humidity();
+    stop_notify_battery();
+}
