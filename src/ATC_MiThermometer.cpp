@@ -20,7 +20,8 @@ ATC_MiThermometer::ATC_MiThermometer(const char *address, Connection_mode connec
           temperaturePreciseCharacteristic(nullptr), humidityCharacteristic(nullptr), batteryCharacteristic(nullptr),
           commandCharacteristic(nullptr), received_settings(false), read_settings(false), started_notify_temp(false),
           started_notify_temp_precise(false), started_notify_humidity(false), started_notify_battery(false),
-          temperature(0), temperature_precise(0), humidity(0), battery_mv(0), battery_level(0) {
+          temperature(0), temperature_precise(0), humidity(0), battery_mv(0), battery_level(0), time_tracking(false),
+          last_read_time(0) {
 }
 
 /**
@@ -123,6 +124,9 @@ void ATC_MiThermometer::notifyTempCallback(NimBLERemoteCharacteristic *pBLERemot
     if (length >= 2) {
         uint16_t temp = (pData[1] << 8) | pData[0];
         temperature = static_cast<float>(temp) / 10.0f;
+        if (time_tracking) {
+            last_read_time = time(nullptr);
+        }
     } else {
         Serial.println("Received invalid temperature data");
     }
@@ -181,6 +185,9 @@ ATC_MiThermometer::notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERem
     if (length >= 2) {
         uint16_t temp = (pData[1] << 8) | pData[0];
         temperature_precise = static_cast<float>(temp) / 100.0f;
+        if (time_tracking) {
+            last_read_time = time(nullptr);
+        }
     } else {
         Serial.println("Received invalid precise temperature data");
     }
@@ -240,6 +247,9 @@ ATC_MiThermometer::notifyHumidityCallback(NimBLERemoteCharacteristic *pBLERemote
     if (length >= 2) {
         uint16_t hum = (pData[1] << 8) | pData[0];
         humidity = static_cast<float>(hum) / 100.0f;
+        if (time_tracking) {
+            last_read_time = time(nullptr);
+        }
     } else {
         Serial.println("Received invalid humidity data");
     }
@@ -311,6 +321,9 @@ ATC_MiThermometer::notifyBatteryCallback(NimBLERemoteCharacteristic *pBLERemoteC
                                          size_t length, bool isNotify) {
     if (length >= 1) {
         battery_level = pData[0];
+        if (time_tracking) {
+            last_read_time = time(nullptr);
+        }
     } else {
         Serial.println("Received invalid battery level data");
     }
@@ -550,6 +563,9 @@ void ATC_MiThermometer::readTemperature() {
         if (value.length() >= 2) {
             uint16_t temp = (value[1] << 8) | value[0];
             temperature = static_cast<float>(temp) / 10.0f;
+            if (time_tracking) {
+                last_read_time = time(nullptr);
+            }
         } else {
             Serial.println("Failed to read temperature, insufficient data");
         }
@@ -593,6 +609,9 @@ void ATC_MiThermometer::readTemperaturePrecise() {
         if (value.length() >= 2) {
             uint16_t temp = (value[1] << 8) | value[0];
             temperature_precise = static_cast<float>(temp) / 100.0f;
+            if (time_tracking) {
+                last_read_time = time(nullptr);
+            }
         } else {
             Serial.println("Failed to read precise temperature, insufficient data");
         }
@@ -631,6 +650,9 @@ void ATC_MiThermometer::readHumidity() {
         if (value.length() >= 2) {
             uint16_t hum = (value[1] << 8) | value[0];
             humidity = static_cast<float>(hum) / 100.0f;
+            if (time_tracking) {
+                last_read_time = time(nullptr);
+            }
         } else {
             Serial.println("Failed to read humidity, insufficient data");
         }
@@ -668,6 +690,9 @@ void ATC_MiThermometer::readBatteryLevel() {
     readCharacteristicValue(batteryCharacteristic, [this](const std::string &value) {
         if (!value.empty()) {
             battery_level = static_cast<uint8_t>(value[0]);
+            if (time_tracking) {
+                last_read_time = time(nullptr);
+            }
         } else {
             Serial.println("Failed to read battery level, insufficient data");
         }
@@ -740,6 +765,9 @@ void ATC_MiThermometer::parseAdvertisingDataATC1441(const uint8_t *data, size_t 
     humidity = data[12];
     battery_level = data[13];
     battery_mv = (data[14] << 8) | data[15];
+    if (time_tracking) {
+        last_read_time = time(nullptr);
+    }
 }
 
 /**
@@ -774,6 +802,9 @@ void ATC_MiThermometer::parseAdvertisingDataPVVX(const uint8_t *data, size_t len
     humidity = static_cast<float>(humidityRaw) * 0.01f;
     battery_mv = data[14] | (data[15] << 8);
     battery_level = data[16];
+    if (time_tracking) {
+        last_read_time = time(nullptr);
+    }
 }
 
 /**
@@ -871,6 +902,9 @@ void ATC_MiThermometer::parseAdvertisingDataBTHOME(const uint8_t *data, size_t l
             }
         }
         index += 1 + element_length;
+    }
+    if (time_tracking) {
+        last_read_time = time(nullptr);
     }
 }
 
@@ -1937,4 +1971,16 @@ void ATC_MiThermometer::readCharacteristicValue(NimBLERemoteCharacteristic *char
     }
     std::string value = characteristic->readValue();
     callback(value);
+}
+
+bool ATC_MiThermometer::getTimeTracking() const {
+    return time_tracking;
+}
+
+void ATC_MiThermometer::setTimeTracking(bool timeTracking) {
+    time_tracking = timeTracking;
+}
+
+time_t ATC_MiThermometer::getLastReadTime() const {
+    return last_read_time;
 }

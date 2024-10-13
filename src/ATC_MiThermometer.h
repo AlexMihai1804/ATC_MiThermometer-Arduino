@@ -616,6 +616,12 @@ public:
      */
     void setClock(time_t time);
 
+    bool getTimeTracking() const;
+
+    void setTimeTracking(bool timeTracking);
+
+    time_t getLastReadTime() const;
+
 private:
     const char *address; /**< The MAC address of the thermometer. */
     NimBLEClient *pClient; /**< Pointer to the BLE client. */
@@ -640,6 +646,8 @@ private:
     uint8_t battery_level; /**< The current battery level. */
     ATC_MiThermometer_Settings settings; /**< The current settings of the thermometer. */
     Connection_mode connection_mode; /**< The connection mode being used. */
+    time_t last_read_time; /**< The last time the thermometer was read. */
+    bool time_tracking; /**< Flag indicating whether time tracking is enabled. */
     /**
      * @brief Callback function for precise temperature notifications.
      * @param pBLERemoteCharacteristic Pointer to the characteristic that triggered the notification.
