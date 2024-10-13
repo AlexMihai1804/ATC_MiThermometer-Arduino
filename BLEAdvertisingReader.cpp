@@ -12,16 +12,13 @@ BLEAdvertisingReader::BLEAdvertisingReader() {
 }
 
 void BLEAdvertisingReader::readAdvertising(uint16_t durationSeconds) {
-    Serial.printf("Starting BLE scan for %d seconds...\n", durationSeconds);
     pBLEScan->start(durationSeconds, false);
-    Serial.printf("Found %d devices\n", pBLEScan->getResults().getCount());
     pBLEScan->clearResults();
 }
 
 void BLEAdvertisingReader::addThermometer(ATC_MiThermometer *thermometer) {
     if (std::find(thermometers.begin(), thermometers.end(), thermometer) == thermometers.end()) {
         thermometers.push_back(thermometer);
-        Serial.printf("Added thermometer with address: %s\n", thermometer->getAddress());
     }
 }
 
@@ -29,7 +26,6 @@ void BLEAdvertisingReader::removeThermometer(ATC_MiThermometer *thermometer) {
     auto it = std::remove(thermometers.begin(), thermometers.end(), thermometer);
     if (it != thermometers.end()) {
         thermometers.erase(it, thermometers.end());
-        Serial.printf("Removed thermometer with address: %s\n", thermometer->getAddress());
     }
 }
 

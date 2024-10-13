@@ -386,7 +386,11 @@ void ATC_MiThermometer::beginNotify() {
 
 float ATC_MiThermometer::getTemperature() {
     if (connection_mode == Connection_mode::ADVERTISING) {
-        return temperature;
+        if (getAdvertisingType() == Advertising_Type::ATC1441) {
+            return temperature;
+        } else {
+            return round(temperature_precise * 10.f) / 10.0f;
+        }
     } else {
         if (!started_notify_temp) {
             readTemperature();
@@ -415,7 +419,11 @@ void ATC_MiThermometer::readTemperature() {
 
 float ATC_MiThermometer::getTemperaturePrecise() {
     if (connection_mode == Connection_mode::ADVERTISING) {
-        return temperature_precise;
+        if (getAdvertisingType() == Advertising_Type::ATC1441) {
+            return temperature;
+        } else {
+            return temperature_precise;
+        }
     } else {
         if (!started_notify_temp_precise) {
             readTemperaturePrecise();
