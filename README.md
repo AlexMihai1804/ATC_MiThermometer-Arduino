@@ -55,7 +55,8 @@ void setup() {
 }
 ```
 ### Reading Data
-```
+
+```cpp
 void loop() {
   // Reading temperature
   float temperature = thermometer.getTemperature();
@@ -79,7 +80,8 @@ void loop() {
 }
 ```
 ### Modifying Device Settings
-```
+
+```cpp
 // Changing RF transmission power
 thermometer.setRfTxPower(RF_TX_Power::dBm_0_90);
 
@@ -94,7 +96,8 @@ ATC_MiThermometer_Settings newSettings = thermometer.getSettings();
 thermometer.sendSettings(newSettings);
 ```
 ### Reading Device Settings
-```
+
+```cpp
 ATC_MiThermometer_Settings settings = thermometer.getSettings();
 Serial.print("RF TX Power: ");
 Serial.println(static_cast<int>(settings.rfTxPower));
@@ -110,7 +113,8 @@ For a complete example, check the examples folder in this repository.
 
 ### Multi-Device Support
 Use the BLEAdvertisingReader class to manage multiple thermometers simultaneously:
-```
+
+```cpp
 #include <NimBLEDevice.h>
 #include "ATC_MiThermometer.h"
 #include "BLEAdvertisingReader.h"
