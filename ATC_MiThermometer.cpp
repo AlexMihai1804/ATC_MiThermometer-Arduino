@@ -1,11 +1,19 @@
+/**
+ * @file ATC_MiThermometer.cpp
+ * @brief This file contains the implementation of the ATC_MiThermometer class.
+ */
 #include "ATC_MiThermometer.h"
 #include <cmath>
 #include <algorithm>
 #include <mutex>
 #include <map>
 
-static std::mutex bleMutex;
-
+static std::mutex bleMutex; /**< Mutex for thread safety during BLE operations. */
+/**
+ * @brief Constructor for the ATC_MiThermometer class.
+ * @param address The MAC address of the thermometer.
+ * @param connection_mode The connection mode to use (ADVERTISING, NOTIFICATION, or CONNECTION). Defaults to ADVERTISING.
+ */
 ATC_MiThermometer::ATC_MiThermometer(const char *address, Connection_mode connection_mode)
         : address(address), pClient(nullptr), environmentService(nullptr), connection_mode(connection_mode),
           batteryService(nullptr), commandService(nullptr), temperatureCharacteristic(nullptr),
@@ -15,10 +23,16 @@ ATC_MiThermometer::ATC_MiThermometer(const char *address, Connection_mode connec
           temperature(0), temperature_precise(0), humidity(0), battery_mv(0), battery_level(0) {
 }
 
+/**
+ * @brief Destructor for the ATC_MiThermometer class.  Disconnects from the thermometer.
+ */
 ATC_MiThermometer::~ATC_MiThermometer() {
     disconnect();
 }
 
+/**
+ * @brief Connects to the thermometer.  Attempts to connect up to 5 times.
+ */
 void ATC_MiThermometer::connect() {
     std::lock_guard<std::mutex> lock(bleMutex);
     if (pClient && pClient->isConnected()) {
@@ -39,17 +53,27 @@ void ATC_MiThermometer::connect() {
     Serial.printf("Failed to connect to %s after 5 attempts\n", address);
 }
 
+/**
+ * @brief Checks if the thermometer is currently connected.
+ * @return True if connected, false otherwise.
+ */
 bool ATC_MiThermometer::isConnected() const {
     return pClient && pClient->isConnected();
 }
 
+/**
+ * @brief Connects to the environment service.  Prints an error message if the service is not found.
+ */
 void ATC_MiThermometer::connectToEnvironmentService() {
-    environmentService = pClient->getService("181A");
+    environmentService = pClient->getService("181A"); // Environmental Sensing Service
     if (!environmentService) {
         Serial.printf("Failed to find service %s\n", "181A");
     }
 }
 
+/**
+ * @brief Connects to the temperature characteristic.  Prints an error message if the characteristic is not found.
+ */
 void ATC_MiThermometer::connectToTemperatureCharacteristic() {
     if (!environmentService) {
         connectToEnvironmentService();
@@ -57,12 +81,16 @@ void ATC_MiThermometer::connectToTemperatureCharacteristic() {
             return;
         }
     }
-    temperatureCharacteristic = environmentService->getCharacteristic("2A1F");
+    temperatureCharacteristic = environmentService->getCharacteristic("2A1F"); // Temperature characteristic UUID
     if (!temperatureCharacteristic) {
         Serial.printf("Failed to find characteristic %s\n", "2A1F");
     }
 }
 
+/**
+ * @brief Begins notifications for temperature.  Subscribes to the temperature characteristic's notifications.
+ *        Prints an error message if the characteristic is not found or cannot notify.
+ */
 void ATC_MiThermometer::beginNotifyTemp() {
     if (!temperatureCharacteristic) {
         connectToTemperatureCharacteristic();
@@ -76,9 +104,20 @@ void ATC_MiThermometer::beginNotifyTemp() {
             this->notifyTempCallback(pBLERemoteCharacteristic, pData, length, isNotify);
         });
         started_notify_temp = true;
+    } else {
+        Serial.println("Temperature characteristic cannot notify");
+
     }
 }
 
+/**
+ * @brief Callback function for temperature notifications.  Updates the internal temperature value.
+ *        Prints an error message if invalid data is received.
+ * @param pBLERemoteCharacteristic Pointer to the characteristic that triggered the notification.
+ * @param pData Pointer to the notification data.
+ * @param length Length of the notification data.
+ * @param isNotify True if this is a notification, false otherwise.
+ */
 void ATC_MiThermometer::notifyTempCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
                                            size_t length, bool isNotify) {
     if (length >= 2) {
@@ -89,6 +128,9 @@ void ATC_MiThermometer::notifyTempCallback(NimBLERemoteCharacteristic *pBLERemot
     }
 }
 
+/**
+ * @brief Connects to the precise temperature characteristic.
+ */
 void ATC_MiThermometer::connectToTemperaturePreciseCharacteristic() {
     if (!environmentService) {
         connectToEnvironmentService();
@@ -96,12 +138,17 @@ void ATC_MiThermometer::connectToTemperaturePreciseCharacteristic() {
             return;
         }
     }
-    temperaturePreciseCharacteristic = environmentService->getCharacteristic("2A6E");
+    temperaturePreciseCharacteristic = environmentService->getCharacteristic(
+            "2A6E"); // Precise Temperature characteristic UUID
     if (!temperaturePreciseCharacteristic) {
+        Serial.printf("Failed to find characteristic %s\n", "2A6E");
         return;
     }
 }
 
+/**
+ * @brief Begins notifications for precise temperature. Subscribes to the precise temperature characteristic's notifications.
+ */
 void ATC_MiThermometer::beginNotifyTempPrecise() {
     if (!temperaturePreciseCharacteristic) {
         connectToTemperaturePreciseCharacteristic();
@@ -115,9 +162,19 @@ void ATC_MiThermometer::beginNotifyTempPrecise() {
             this->notifyTempPreciseCallback(pBLERemoteCharacteristic, pData, length, isNotify);
         });
         started_notify_temp_precise = true;
+    } else {
+        Serial.println("Precise Temperature characteristic cannot notify");
     }
 }
 
+/**
+ * @brief Callback function for precise temperature notifications.  Updates the internal precise temperature value.
+ *        Prints an error message if invalid data is received.
+ * @param pBLERemoteCharacteristic Pointer to the characteristic that triggered the notification.
+ * @param pData Pointer to the notification data.
+ * @param length  Length of the notification data.
+ * @param isNotify  True if this is a notification, false otherwise.
+ */
 void
 ATC_MiThermometer::notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
                                              size_t length, bool isNotify) {
@@ -129,6 +186,9 @@ ATC_MiThermometer::notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERem
     }
 }
 
+/**
+* @brief Connects to the humidity characteristic. Prints an error message if the characteristic is not found.
+*/
 void ATC_MiThermometer::connectToHumidityCharacteristic() {
     if (!environmentService) {
         connectToEnvironmentService();
@@ -136,12 +196,16 @@ void ATC_MiThermometer::connectToHumidityCharacteristic() {
             return;
         }
     }
-    humidityCharacteristic = environmentService->getCharacteristic("2A6F");
+    humidityCharacteristic = environmentService->getCharacteristic("2A6F"); // Humidity characteristic UUID
     if (!humidityCharacteristic) {
         Serial.printf("Failed to find characteristic %s\n", "2A6F");
     }
 }
 
+/**
+ * @brief Begins notifications for humidity. Subscribes to the humidity characteristic's notifications.
+ *        Prints an error message if the characteristic is not found or cannot notify.
+ */
 void ATC_MiThermometer::beginNotifyHumidity() {
     if (!humidityCharacteristic) {
         connectToHumidityCharacteristic();
@@ -152,15 +216,24 @@ void ATC_MiThermometer::beginNotifyHumidity() {
     if (humidityCharacteristic->canNotify()) {
         humidityCharacteristic->subscribe(true,
                                           [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
-                                                 const uint8_t *pData,
-                                                 size_t length, bool isNotify) {
+                                                 const uint8_t *pData, size_t length, bool isNotify) {
                                               this->notifyHumidityCallback(pBLERemoteCharacteristic, pData, length,
                                                                            isNotify);
                                           });
         started_notify_humidity = true;
+    } else {
+        Serial.println("Humidity characteristic cannot notify");
     }
 }
 
+/**
+ * @brief Callback function for humidity notifications.  Updates the internal humidity value.
+ *      Prints an error message if invalid data is received.
+ * @param pBLERemoteCharacteristic Pointer to the characteristic that triggered the notification.
+ * @param pData Pointer to the notification data.
+ * @param length Length of the notification data.
+ * @param isNotify  True if this is a notification, false otherwise.
+ */
 void
 ATC_MiThermometer::notifyHumidityCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
                                           size_t length, bool isNotify) {
@@ -172,13 +245,21 @@ ATC_MiThermometer::notifyHumidityCallback(NimBLERemoteCharacteristic *pBLERemote
     }
 }
 
+/**
+ * @brief  Connects to the battery service.
+ */
 void ATC_MiThermometer::connectToBatteryService() {
-    batteryService = pClient->getService("180F");
+    batteryService = pClient->getService("180F"); // Battery Service UUID
     if (!batteryService) {
+        Serial.printf("Failed to find service %s\n", "180F");
+
         return;
     }
 }
 
+/**
+ * @brief Connects to the battery characteristic.  Prints an error message if the characteristic is not found.
+ */
 void ATC_MiThermometer::connectToBatteryCharacteristic() {
     if (!batteryService) {
         connectToBatteryService();
@@ -186,12 +267,16 @@ void ATC_MiThermometer::connectToBatteryCharacteristic() {
             return;
         }
     }
-    batteryCharacteristic = batteryService->getCharacteristic("2A19");
+    batteryCharacteristic = batteryService->getCharacteristic("2A19"); // Battery Level characteristic UUID
     if (!batteryCharacteristic) {
         Serial.printf("Failed to find characteristic %s\n", "2A19");
     }
 }
 
+/**
+ * @brief  Begins notifications for battery level.  Subscribes to the battery characteristic's notifications.
+ *         Prints an error message if the characteristic is not found or cannot notify.
+ */
 void ATC_MiThermometer::beginNotifyBattery() {
     if (!batteryCharacteristic) {
         connectToBatteryCharacteristic();
@@ -202,15 +287,25 @@ void ATC_MiThermometer::beginNotifyBattery() {
     if (batteryCharacteristic->canNotify()) {
         batteryCharacteristic->subscribe(true,
                                          [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
-                                                const uint8_t *pData,
-                                                size_t length, bool isNotify) {
+                                                const uint8_t *pData, size_t length, bool isNotify) {
                                              this->notifyBatteryCallback(pBLERemoteCharacteristic, pData, length,
                                                                          isNotify);
                                          });
         started_notify_battery = true;
+    } else {
+        Serial.println("Battery characteristic cannot notify");
+
     }
 }
 
+/**
+ * @brief Callback function for battery level notifications.  Updates the internal battery level value.
+ *        Prints an error message if invalid data is received.
+ * @param pBLERemoteCharacteristic  Pointer to the characteristic that triggered the notification.
+ * @param pData Pointer to the notification data.
+ * @param length Length of the notification data.
+ * @param isNotify  True if this is a notification, false otherwise.
+ */
 void
 ATC_MiThermometer::notifyBatteryCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
                                          size_t length, bool isNotify) {
@@ -221,13 +316,19 @@ ATC_MiThermometer::notifyBatteryCallback(NimBLERemoteCharacteristic *pBLERemoteC
     }
 }
 
+/**
+ * @brief Connects to the command service. Prints an error message if the service is not found.
+ */
 void ATC_MiThermometer::connectToCommandService() {
-    commandService = pClient->getService("1F10");
+    commandService = pClient->getService("1F10"); // Command Service UUID
     if (!commandService) {
         Serial.printf("Failed to find service %s\n", "1F10");
     }
 }
 
+/**
+ * @brief Connects to the command characteristic.  Prints an error message if the characteristic is not found.
+ */
 void ATC_MiThermometer::connectToCommandCharacteristic() {
     if (!commandService) {
         connectToCommandService();
@@ -235,12 +336,17 @@ void ATC_MiThermometer::connectToCommandCharacteristic() {
             return;
         }
     }
-    commandCharacteristic = commandService->getCharacteristic("1F1F");
+    commandCharacteristic = commandService->getCharacteristic("1F1F"); // Command characteristic UUID
     if (!commandCharacteristic) {
         Serial.printf("Failed to find characteristic %s\n", "1F1F");
     }
 }
 
+/**
+ * @brief Reads the settings from the thermometer.  Connects to the device, subscribes to notifications
+ * from the command characteristic, sends a read settings command (0x55), waits for the settings data,
+ * then unsubscribes from notifications.  Prints error messages if connection or reading settings fails.
+ */
 void ATC_MiThermometer::readSettings() {
     std::lock_guard<std::mutex> lock(bleMutex);
     int attempts = 0;
@@ -271,8 +377,7 @@ void ATC_MiThermometer::readSettings() {
     if (commandCharacteristic->canNotify()) {
         commandCharacteristic->subscribe(true,
                                          [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
-                                                const uint8_t *pData,
-                                                size_t length, bool isNotify) {
+                                                const uint8_t *pData, size_t length, bool isNotify) {
                                              this->notifySettingsCallback(pBLERemoteCharacteristic, pData, length,
                                                                           isNotify);
                                          });
@@ -280,13 +385,13 @@ void ATC_MiThermometer::readSettings() {
         Serial.println("Command characteristic cannot notify");
         return;
     }
-    delay(1000);
-    std::vector<uint8_t> data = {0x55};
+    delay(1000); // Delay to ensure connection is stable.
+    std::vector<uint8_t> data = {0x55}; // Read settings command
     sendCommand(data);
     uint32_t start = millis();
-    while (!received_settings && millis() - start < 5000) {
+    while (!received_settings && millis() - start < 5000) { // Timeout after 5 seconds
         delay(100);
-        yield();
+        yield(); // Allow other tasks to run
     }
     if (!received_settings) {
         Serial.println("Failed to read settings");
@@ -294,6 +399,14 @@ void ATC_MiThermometer::readSettings() {
     commandCharacteristic->unsubscribe();
 }
 
+/**
+ * @brief  Callback function for settings notifications.  Parses the settings data received from the thermometer
+ *          and stores it in the settings member variable. Prints error messages if invalid data is received.
+ * @param pBLERemoteCharacteristic  Pointer to the characteristic that triggered the notification.
+ * @param pData  Pointer to the notification data.
+ * @param length Length of the notification data.
+ * @param isNotify  True if this is a notification, false otherwise.
+ */
 void
 ATC_MiThermometer::notifySettingsCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
                                           size_t length, bool isNotify) {
@@ -303,11 +416,11 @@ ATC_MiThermometer::notifySettingsCallback(NimBLERemoteCharacteristic *pBLERemote
     }
     read_settings = true;
     received_settings = true;
-    if (length < 13) {
+    if (length < 13) { // Check if data length is sufficient
         Serial.println("Invalid settings length");
         return;
     }
-    if (length >= 13) {
+    if (length >= 13) { // Parse the settings data
         settings.lp_measures = (pData[2] & 0x80) != 0;
         settings.tx_measures = (pData[2] & 0x40) != 0;
         settings.show_battery = (pData[2] & 0x20) != 0;
@@ -333,6 +446,10 @@ ATC_MiThermometer::notifySettingsCallback(NimBLERemoteCharacteristic *pBLERemote
     }
 }
 
+/**
+ * @brief Sends a command to the thermometer.  Prints an error message if sending the command fails.
+ * @param data  The command data to send.
+ */
 void ATC_MiThermometer::sendCommand(const std::vector<uint8_t> &data) {
     if (!commandCharacteristic) {
         connectToCommandCharacteristic();
@@ -341,12 +458,15 @@ void ATC_MiThermometer::sendCommand(const std::vector<uint8_t> &data) {
             return;
         }
     }
-    bool success = commandCharacteristic->writeValue(data.data(), data.size(), true);
+    bool success = commandCharacteristic->writeValue(data.data(), data.size(), true); // Write value with response.
     if (!success) {
         Serial.println("Failed to send command");
     }
 }
 
+/**
+ * @brief Disconnects from the thermometer and resets all service and characteristic pointers.
+ */
 void ATC_MiThermometer::disconnect() {
     std::lock_guard<std::mutex> lock(bleMutex);
     if (pClient && pClient->isConnected()) {
@@ -363,12 +483,18 @@ void ATC_MiThermometer::disconnect() {
     commandCharacteristic = nullptr;
 }
 
+/**
+ * @brief Connects to all available services (environment, battery, and command).
+ */
 void ATC_MiThermometer::connectToAllServices() {
     connectToEnvironmentService();
     connectToBatteryService();
     connectToCommandService();
 }
 
+/**
+ * @brief Connects to all available characteristics (temperature, precise temperature, humidity, battery, and command).
+ */
 void ATC_MiThermometer::connectToAllCharacteristics() {
     connectToTemperatureCharacteristic();
     connectToTemperaturePreciseCharacteristic();
@@ -377,6 +503,9 @@ void ATC_MiThermometer::connectToAllCharacteristics() {
     connectToCommandCharacteristic();
 }
 
+/**
+ * @brief Begins notifications for all available characteristics (temperature, precise temperature, humidity, and battery).
+ */
 void ATC_MiThermometer::beginNotify() {
     beginNotifyTemp();
     beginNotifyTempPrecise();
@@ -384,12 +513,18 @@ void ATC_MiThermometer::beginNotify() {
     beginNotifyBattery();
 }
 
+/**
+ * @brief Gets the temperature, handling different advertising types and connection modes.
+ *  If in ADVERTISING mode, returns the temperature from advertising data.
+ *  If in NOTIFICATION or CONNECTION mode, reads the temperature if notifications haven't been started.
+ * @return The temperature in degrees Celsius.
+ */
 float ATC_MiThermometer::getTemperature() {
     if (connection_mode == Connection_mode::ADVERTISING) {
         if (getAdvertisingType() == Advertising_Type::ATC1441) {
             return temperature;
         } else {
-            return round(temperature_precise * 10.f) / 10.0f;
+            return round(temperature_precise * 10.f) / 10.0f; // Round to one decimal place
         }
     } else {
         if (!started_notify_temp) {
@@ -399,6 +534,10 @@ float ATC_MiThermometer::getTemperature() {
     }
 }
 
+/**
+ * @brief Reads the temperature from the temperature characteristic.  Uses a connection if necessary.
+ *       Prints an error message if reading fails or insufficient data is received.
+ */
 void ATC_MiThermometer::readTemperature() {
     if (!temperatureCharacteristic) {
         connectToTemperatureCharacteristic();
@@ -417,6 +556,12 @@ void ATC_MiThermometer::readTemperature() {
     });
 }
 
+/**
+ * @brief Gets the precise temperature, handling different advertising types and connection modes.
+ * If in ADVERTISING mode, returns the precise temperature from advertising data.
+ * If in NOTIFICATION or CONNECTION mode, reads the precise temperature if notifications haven't been started.
+ * @return The precise temperature in degrees Celsius.
+ */
 float ATC_MiThermometer::getTemperaturePrecise() {
     if (connection_mode == Connection_mode::ADVERTISING) {
         if (getAdvertisingType() == Advertising_Type::ATC1441) {
@@ -432,6 +577,10 @@ float ATC_MiThermometer::getTemperaturePrecise() {
     }
 }
 
+/**
+ * @brief Reads the precise temperature from the precise temperature characteristic.  Uses a connection if necessary.
+ *        Prints an error message if reading fails or insufficient data is received.
+ */
 void ATC_MiThermometer::readTemperaturePrecise() {
     if (!temperaturePreciseCharacteristic) {
         connectToTemperaturePreciseCharacteristic();
@@ -450,6 +599,11 @@ void ATC_MiThermometer::readTemperaturePrecise() {
     });
 }
 
+/**
+ * @brief Gets the humidity. If in ADVERTISING mode, returns humidity from advertising data.
+ * If in NOTIFICATION or CONNECTION mode, reads humidity if notifications haven't been started.
+ * @return The humidity in percentage.
+ */
 float ATC_MiThermometer::getHumidity() {
     if (connection_mode == Connection_mode::ADVERTISING) {
         return humidity;
@@ -461,6 +615,10 @@ float ATC_MiThermometer::getHumidity() {
     }
 }
 
+/**
+ * @brief Reads the humidity from the humidity characteristic. Uses a connection if necessary.
+ *       Prints an error message if reading fails or insufficient data is received.
+ */
 void ATC_MiThermometer::readHumidity() {
     if (!humidityCharacteristic) {
         connectToHumidityCharacteristic();
@@ -479,6 +637,11 @@ void ATC_MiThermometer::readHumidity() {
     });
 }
 
+/**
+ * @brief Gets the battery level. If in ADVERTISING mode, returns the battery level from advertising data.
+ * If in NOTIFICATION or CONNECTION mode, reads the battery level if notifications haven't been started.
+ * @return The battery level in percentage.
+ */
 uint8_t ATC_MiThermometer::getBatteryLevel() {
     if (connection_mode == Connection_mode::ADVERTISING) {
         return battery_level;
@@ -490,6 +653,10 @@ uint8_t ATC_MiThermometer::getBatteryLevel() {
     }
 }
 
+/**
+ * @brief Reads the battery level from the battery characteristic. Uses a connection if necessary.
+ *       Prints an error message if reading fails or insufficient data is received.
+ */
 void ATC_MiThermometer::readBatteryLevel() {
     if (!batteryCharacteristic) {
         connectToBatteryCharacteristic();
@@ -507,6 +674,10 @@ void ATC_MiThermometer::readBatteryLevel() {
     });
 }
 
+/**
+ * @brief Gets the advertising type. Reads settings if they haven't been read yet.
+ * @return The advertising type.
+ */
 Advertising_Type ATC_MiThermometer::getAdvertisingType() {
     if (!read_settings) {
         readSettings();
@@ -514,10 +685,20 @@ Advertising_Type ATC_MiThermometer::getAdvertisingType() {
     return settings.advertising_type;
 }
 
+/**
+ * @brief Gets the MAC address of the thermometer.
+ * @return The MAC address.
+ */
 const char *ATC_MiThermometer::getAddress() const {
     return address;
 }
 
+/**
+ * @brief Parses the advertising data based on the advertising type.
+ * Reads settings if they haven't been read yet. Disconnects if in ADVERTISING mode after reading settings.
+ * @param data The advertising data.
+ * @param length The length of the advertising data.
+ */
 void ATC_MiThermometer::parseAdvertisingData(const uint8_t *data, size_t length) {
     if (!read_settings) {
         readSettings();
@@ -542,6 +723,13 @@ void ATC_MiThermometer::parseAdvertisingData(const uint8_t *data, size_t length)
     }
 }
 
+/**
+ * @brief Parses advertising data in ATC1441 format.
+ * Extracts temperature, humidity, battery level, and battery voltage.
+ * Prints an error message if the packet is too short.
+ * @param data The advertising data.
+ * @param length The length of the advertising data.
+ */
 void ATC_MiThermometer::parseAdvertisingDataATC1441(const uint8_t *data, size_t length) {
     if (length < 18) {
         Serial.println("Packet too short!");
@@ -554,6 +742,12 @@ void ATC_MiThermometer::parseAdvertisingDataATC1441(const uint8_t *data, size_t 
     battery_mv = (data[14] << 8) | data[15];
 }
 
+/**
+ * @brief Parses advertising data in PVVX format. Extracts precise temperature, humidity, battery voltage, and battery level.
+ * Prints error messages if the packet is too short, has an incorrect size, or an incorrect UUID.
+ * @param data The advertising data.
+ * @param length The length of the advertising data.
+ */
 void ATC_MiThermometer::parseAdvertisingDataPVVX(const uint8_t *data, size_t length) {
     if (length < 19) {
         Serial.println("Packet too short!");
@@ -582,6 +776,13 @@ void ATC_MiThermometer::parseAdvertisingDataPVVX(const uint8_t *data, size_t len
     battery_level = data[16];
 }
 
+/**
+ * @brief Parses advertising data in BTHome format.  Extracts battery level, temperature, humidity, and voltage.
+ * Prints error messages if the packet is too short, the AD element length exceeds the packet size,
+ * the service data is too short, or the UUID is unknown.
+ * @param data The advertising data.
+ * @param length The length of the advertising data.
+ */
 void ATC_MiThermometer::parseAdvertisingDataBTHOME(const uint8_t *data, size_t length) {
     if (length < 6) {
         Serial.println("Packet too short!");
@@ -600,13 +801,13 @@ void ATC_MiThermometer::parseAdvertisingDataBTHOME(const uint8_t *data, size_t l
         uint8_t ad_type = data[index + 1];
         const uint8_t *ad_data = &data[index + 2];
         uint8_t ad_data_length = element_length - 1;
-        if (ad_type == 0x16) {
+        if (ad_type == 0x16) { // Service Data - 16-bit UUID
             if (ad_data_length < 3) {
                 Serial.println("Service Data too short!");
                 break;
             }
             uint16_t uuid = ad_data[0] | (ad_data[1] << 8);
-            if (uuid != 0xFCD2) {
+            if (uuid != 0xFCD2) { // BTHome UUID
                 Serial.println("Unknown UUID for BTHome!");
                 break;
             }
@@ -664,7 +865,7 @@ void ATC_MiThermometer::parseAdvertisingDataBTHOME(const uint8_t *data, size_t l
                         break;
                     }
                     default:
-                        dataIndex = ad_data_length;
+                        dataIndex = ad_data_length; // Skip unknown object IDs
                         break;
                 }
             }
@@ -673,6 +874,12 @@ void ATC_MiThermometer::parseAdvertisingDataBTHOME(const uint8_t *data, size_t l
     }
 }
 
+/**
+ * @brief Initializes the thermometer based on the connection mode.
+ * Connects to the device, reads settings, and disconnects if in ADVERTISING mode.
+ * Subscribes to notifications if in NOTIFICATION mode. Reads data on demand if in CONNECTION mode.
+ * Prints error messages if connection or settings reading fails.
+ */
 void ATC_MiThermometer::init() {
     int attempts = 0;
     while (!isConnected() && attempts < 5) {
@@ -720,10 +927,19 @@ void ATC_MiThermometer::init() {
     }
 }
 
+/**
+ * @brief Returns whether the settings have been successfully read from the device.
+ * @return True if settings have been read, false otherwise.
+ */
 bool ATC_MiThermometer::getReadSettings() const {
     return read_settings;
 }
 
+/**
+ * @brief  Gets the battery voltage. If in ADVERTISING mode, returns the parsed battery voltage.
+ *          If in CONNECTION or NOTIFICATION mode, estimates the voltage based on the battery level.
+ * @return The battery voltage in millivolts.
+ */
 uint16_t ATC_MiThermometer::getBatteryVoltage() {
     if (connection_mode == Connection_mode::ADVERTISING) {
         return battery_mv;
@@ -731,10 +947,15 @@ uint16_t ATC_MiThermometer::getBatteryVoltage() {
         if (!started_notify_battery) {
             readBatteryLevel();
         }
+        // Estimate voltage based on battery percentage (assuming a linear relationship between 2000mV and 3000mV)
         return 2000 + (battery_level * (3000 - 2000) / 100);
     }
 }
 
+/**
+ * @brief Gets the RF TX Power setting from the device. Reads the settings if they haven't been read already.
+ * @return The RF TX Power as an RF_TX_Power enum.
+ */
 RF_TX_Power ATC_MiThermometer::getRfTxPower() {
     if (!read_settings) {
         readSettings();
@@ -742,6 +963,10 @@ RF_TX_Power ATC_MiThermometer::getRfTxPower() {
     return settings.rfTxPower;
 }
 
+/**
+ * @brief  Gets the Low Power Measures setting from the device. Reads the settings if they haven't been read already.
+ * @return  True if Low Power Measures are enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getLowPowerMeasures() {
     if (!read_settings) {
         readSettings();
@@ -749,6 +974,10 @@ bool ATC_MiThermometer::getLowPowerMeasures() {
     return settings.lp_measures;
 }
 
+/**
+ * @brief Gets the Transmit Measures setting from the device. Reads the settings if they haven't been read already.
+ * @return  True if Transmit Measures are enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getTransmitMeasures() {
     if (!read_settings) {
         readSettings();
@@ -756,6 +985,10 @@ bool ATC_MiThermometer::getTransmitMeasures() {
     return settings.tx_measures;
 }
 
+/**
+ * @brief Gets the Show Battery setting from the device. Reads the settings if they haven't been read already.
+ * @return True if Show Battery is enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getShowBattery() {
     if (!read_settings) {
         readSettings();
@@ -763,6 +996,10 @@ bool ATC_MiThermometer::getShowBattery() {
     return settings.show_battery;
 }
 
+/**
+ * @brief Gets the temperature unit setting (Fahrenheit or Celsius). Reads the settings if they haven't been read already.
+ * @return  True if set to Fahrenheit, false if set to Celsius.
+ */
 bool ATC_MiThermometer::getTempFOrC() {
     if (!read_settings) {
         readSettings();
@@ -770,6 +1007,10 @@ bool ATC_MiThermometer::getTempFOrC() {
     return settings.temp_F_or_C;
 }
 
+/**
+ * @brief Gets the Blinking Time Smile setting. Reads the settings if they haven't been read already.
+ * @return True if Blinking Time Smile is enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getBlinkingTimeSmile() {
     if (!read_settings) {
         readSettings();
@@ -777,6 +1018,10 @@ bool ATC_MiThermometer::getBlinkingTimeSmile() {
     return settings.blinking_time_smile;
 }
 
+/**
+ * @brief Gets the Comfort Smiley setting. Reads the settings if they haven't been read already.
+ * @return True if Comfort Smiley is enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getComfortSmiley() {
     if (!read_settings) {
         readSettings();
@@ -784,6 +1029,10 @@ bool ATC_MiThermometer::getComfortSmiley() {
     return settings.comfort_smiley;
 }
 
+/**
+ * @brief Gets the Adv Crypto setting. Reads the settings if they haven't been read already.
+ * @return True if Adv Crypto is enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getAdvCrypto() {
     if (!read_settings) {
         readSettings();
@@ -791,6 +1040,10 @@ bool ATC_MiThermometer::getAdvCrypto() {
     return settings.adv_crypto;
 }
 
+/**
+ * @brief Gets the Adv Flags setting. Reads the settings if they haven't been read already.
+ * @return True if Adv Flags is enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getAdvFlags() {
     if (!read_settings) {
         readSettings();
@@ -798,6 +1051,10 @@ bool ATC_MiThermometer::getAdvFlags() {
     return settings.adv_flags;
 }
 
+/**
+ * @brief Gets the current Smiley setting. Reads the settings if they haven't been read already.
+ * @return The current Smiley as a Smiley enum.
+ */
 Smiley ATC_MiThermometer::getSmiley() {
     if (!read_settings) {
         readSettings();
@@ -805,6 +1062,10 @@ Smiley ATC_MiThermometer::getSmiley() {
     return settings.smiley;
 }
 
+/**
+ * @brief  Gets the BT5 PHY setting. Reads the settings if they haven't been read already.
+ * @return True if BT5 PHY is enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getBT5PHY() {
     if (!read_settings) {
         readSettings();
@@ -812,6 +1073,10 @@ bool ATC_MiThermometer::getBT5PHY() {
     return settings.bt5phy;
 }
 
+/**
+ * @brief Gets the Long Range setting.  Reads the settings if they haven't been read already.
+ * @return  True if Long Range is enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getLongRange() {
     if (!read_settings) {
         readSettings();
@@ -819,6 +1084,10 @@ bool ATC_MiThermometer::getLongRange() {
     return settings.long_range;
 }
 
+/**
+ * @brief  Gets the Screen Off setting.  Reads the settings if they haven't been read already.
+ * @return True if Screen Off is enabled, false otherwise.
+ */
 bool ATC_MiThermometer::getScreenOff() {
     if (!read_settings) {
         readSettings();
@@ -826,6 +1095,10 @@ bool ATC_MiThermometer::getScreenOff() {
     return settings.screen_off;
 }
 
+/**
+ * @brief  Gets the temperature offset. Reads the settings if they haven't been read already.
+ * @return  The temperature offset.
+ */
 float ATC_MiThermometer::getTempOffset() {
     if (!read_settings) {
         readSettings();
@@ -833,6 +1106,10 @@ float ATC_MiThermometer::getTempOffset() {
     return settings.temp_offset;
 }
 
+/**
+ * @brief Gets the humidity offset. Reads the settings if they haven't been read already.
+ * @return  The humidity offset.
+ */
 float ATC_MiThermometer::getHumidityOffset() {
     if (!read_settings) {
         readSettings();
@@ -840,6 +1117,10 @@ float ATC_MiThermometer::getHumidityOffset() {
     return settings.humidity_offset;
 }
 
+/**
+ * @brief Gets the calibrated temperature offset.  Reads the settings if they haven't been read already.
+ * @return The calibrated temperature offset.
+ */
 int8_t ATC_MiThermometer::getTempOffsetCal() {
     if (!read_settings) {
         readSettings();
@@ -847,6 +1128,10 @@ int8_t ATC_MiThermometer::getTempOffsetCal() {
     return settings.temp_offset_cal;
 }
 
+/**
+ * @brief  Gets the calibrated humidity offset.  Reads the settings if they haven't been read already.
+ * @return  The calibrated humidity offset.
+ */
 int8_t ATC_MiThermometer::getHumidityOffsetCal() {
     if (!read_settings) {
         readSettings();
@@ -854,6 +1139,10 @@ int8_t ATC_MiThermometer::getHumidityOffsetCal() {
     return settings.humidity_offset_cal;
 }
 
+/**
+ * @brief Gets the advertising interval in steps. Reads the settings if they haven't been read already.
+ * @return The advertising interval in steps.
+ */
 uint8_t ATC_MiThermometer::getAdvertisingIntervalSteps() {
     if (!read_settings) {
         readSettings();
@@ -861,6 +1150,10 @@ uint8_t ATC_MiThermometer::getAdvertisingIntervalSteps() {
     return settings.advertising_interval;
 }
 
+/**
+ * @brief Gets the measure interval in steps. Reads the settings if they haven't been read already.
+ * @return The measure interval in steps.
+ */
 uint8_t ATC_MiThermometer::getMeasureIntervalSteps() {
     if (!read_settings) {
         readSettings();
@@ -868,6 +1161,10 @@ uint8_t ATC_MiThermometer::getMeasureIntervalSteps() {
     return settings.measure_interval;
 }
 
+/**
+ * @brief  Gets the connect latency in steps.  Reads the settings if they haven't been read already.
+ * @return The connect latency in steps.
+ */
 uint8_t ATC_MiThermometer::getConnectLatencySteps() {
     if (!read_settings) {
         readSettings();
@@ -875,6 +1172,10 @@ uint8_t ATC_MiThermometer::getConnectLatencySteps() {
     return settings.connect_latency;
 }
 
+/**
+ * @brief Gets the LCD update interval in steps. Reads the settings if they haven't been read already.
+ * @return The LCD update interval in steps.
+ */
 uint8_t ATC_MiThermometer::getLcdUpdateIntervalSteps() {
     if (!read_settings) {
         readSettings();
@@ -882,6 +1183,10 @@ uint8_t ATC_MiThermometer::getLcdUpdateIntervalSteps() {
     return settings.lcd_update_interval;
 }
 
+/**
+ * @brief Gets the hardware version ID.  Reads the settings if they haven't been read already.
+ * @return The HW_VERSION_ID enum representing the hardware version.
+ */
 HW_VERSION_ID ATC_MiThermometer::getHwVersion() {
     if (!read_settings) {
         readSettings();
@@ -889,6 +1194,10 @@ HW_VERSION_ID ATC_MiThermometer::getHwVersion() {
     return settings.hw_version;
 }
 
+/**
+ * @brief Gets the averaging measurements setting in steps.  Reads the settings if they haven't been read already.
+ * @return The averaging measurements setting in steps.
+ */
 uint8_t ATC_MiThermometer::getAveragingMeasurementsSteps() {
     if (!read_settings) {
         readSettings();
@@ -896,6 +1205,10 @@ uint8_t ATC_MiThermometer::getAveragingMeasurementsSteps() {
     return settings.averaging_measurements;
 }
 
+/**
+ * @brief Gets the RF TX Power in dBm. Uses a map to convert from the RF_TX_Power enum to a float value.
+ * @return The RF TX Power in dBm.  Returns 0.0f if the power level is not found in the map.
+ */
 float ATC_MiThermometer::getRfTxPowerdBm() {
     static const std::map<RF_TX_Power, float> powerMap = {
             {RF_TX_Power::dBm_3_01,   3.01f},
@@ -958,34 +1271,63 @@ float ATC_MiThermometer::getRfTxPowerdBm() {
     return 0.0f;
 }
 
+/**
+ * @brief  Gets the advertising interval in milliseconds.
+ * @return The advertising interval in milliseconds.
+ */
 uint16_t ATC_MiThermometer::getAdvertisingIntervalMs() {
     return static_cast<uint16_t>(static_cast<float>(getAdvertisingIntervalSteps()) * advertising_interval_step_time_ms);
 }
 
+/**
+ * @brief Gets the measurement interval in milliseconds.
+ * @return The measurement interval in milliseconds.
+ */
 uint32_t ATC_MiThermometer::getMeasureIntervalMs() {
     return getMeasureIntervalSteps() * getAdvertisingIntervalMs();
 }
 
+/**
+ * @brief Gets the connection latency in milliseconds.
+ * @return The connection latency in milliseconds.
+ */
 uint16_t ATC_MiThermometer::getConnectLatencyMs() {
     return getConnectLatencySteps() * connect_latency_step_time_ms;
 }
 
+/**
+ * @brief  Gets the LCD update interval in milliseconds.
+ * @return  The LCD update interval in milliseconds.
+ */
 uint16_t ATC_MiThermometer::getLcdUpdateIntervalMs() {
     return getLcdUpdateIntervalSteps() * lcd_update_interval_step_time_ms;
 }
 
+/**
+ * @brief Gets the averaging measurement time in milliseconds.
+ * @return  The averaging measurement time in milliseconds.
+ */
 uint32_t ATC_MiThermometer::getAveragingMeasurementsMs() {
     return getMeasureIntervalMs() * getAveragingMeasurementsSteps();
 }
 
+/**
+ * @brief  Gets the averaging measurement time in seconds.
+ * @return The averaging measurement time in seconds.
+ */
 uint16_t ATC_MiThermometer::getAveragingMeasurementsSec() {
     return static_cast<uint16_t>(getAveragingMeasurementsMs() / 1000);
 }
 
+/**
+ * @brief  Parses the provided settings struct into a byte vector that can be sent to the device as a command.
+ * @param settingsToParse The settings struct to parse.
+ * @return A byte vector representing the settings, ready to be sent to the device.
+ */
 std::vector<uint8_t> ATC_MiThermometer::parseSettings(const ATC_MiThermometer_Settings &settingsToParse) {
     std::vector<uint8_t> data(12);
-    data[0] = 0x55;
-    data[1] = 0x0A;
+    data[0] = 0x55; // Command header
+    data[1] = 0x0A; // Command length
     data[2] = (settingsToParse.lp_measures << 7) | (settingsToParse.tx_measures << 6) |
               (settingsToParse.show_battery << 5) |
               (settingsToParse.temp_F_or_C << 4) | (settingsToParse.blinking_time_smile << 3) |
@@ -1005,6 +1347,12 @@ std::vector<uint8_t> ATC_MiThermometer::parseSettings(const ATC_MiThermometer_Se
     return data;
 }
 
+/**
+ * @brief Sends the given settings to the thermometer. Connects to the device,
+ * subscribes to notifications, sends the settings command, waits for confirmation, and then unsubscribes.
+ * Prints error messages if connection or settings sending fails.
+ * @param newSettings The new settings to apply to the thermometer.
+ */
 void ATC_MiThermometer::sendSettings(const ATC_MiThermometer_Settings &newSettings) {
     std::lock_guard<std::mutex> lock(bleMutex);
     int attempts = 0;
@@ -1035,8 +1383,7 @@ void ATC_MiThermometer::sendSettings(const ATC_MiThermometer_Settings &newSettin
     if (commandCharacteristic->canNotify()) {
         commandCharacteristic->subscribe(true,
                                          [this](NimBLERemoteCharacteristic *pBLERemoteCharacteristic,
-                                                const uint8_t *pData,
-                                                size_t length, bool isNotify) {
+                                                const uint8_t *pData, size_t length, bool isNotify) {
                                              this->notifySettingsCallback(pBLERemoteCharacteristic, pData, length,
                                                                           isNotify);
                                          });
@@ -1052,21 +1399,36 @@ void ATC_MiThermometer::sendSettings(const ATC_MiThermometer_Settings &newSettin
         yield();
     }
     if (!received_settings) {
-        Serial.println("Failed to read settings");
+        Serial.println("Failed to send settings");
     }
     commandCharacteristic->unsubscribe();
 }
 
+/**
+ * @brief Sets the RF TX Power.
+ * @param power The RF TX power to set (as an RF_TX_Power enum).
+ */
 void ATC_MiThermometer::setRfTxPower(RF_TX_Power power) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.rfTxPower = power;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief  Gets the current settings of the thermometer.
+ * @return The current settings as an ATC_MiThermometer_Settings struct.
+ */
 ATC_MiThermometer_Settings ATC_MiThermometer::getSettings() {
+    if (!read_settings) {
+        readSettings();
+    }
     return settings;
 }
 
+/**
+ * @brief  Sets the RF TX Power in dBm. Finds the closest matching enum value and sets it.
+ * @param power  The desired RF TX Power in dBm (as a float).
+ */
 void ATC_MiThermometer::setRfTxPowerdBm(float power) {
     static const std::map<float, RF_TX_Power> powerMap = {
             {3.01f,   RF_TX_Power::dBm_3_01},
@@ -1130,165 +1492,282 @@ void ATC_MiThermometer::setRfTxPowerdBm(float power) {
     setRfTxPower(closest->second);
 }
 
+/**
+ * @brief Sets the Low Power Measures setting.
+ * @param lowPowerMeasures True to enable low power measures, false to disable.
+ */
 void ATC_MiThermometer::setLowPowerMeasures(bool lowPowerMeasures) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.lp_measures = lowPowerMeasures;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Transmit Measures setting.
+ * @param transmitMeasures True to enable transmit measures, false to disable.
+ */
 void ATC_MiThermometer::setTransmitMeasures(bool transmitMeasures) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.tx_measures = transmitMeasures;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Show Battery setting.
+ * @param showBattery True to show battery level, false to hide.
+ */
 void ATC_MiThermometer::setShowBattery(bool showBattery) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.show_battery = showBattery;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the temperature unit.
+ * @param tempFOrC True for Fahrenheit, false for Celsius.
+ */
 void ATC_MiThermometer::setTempFOrC(bool tempFOrC) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.temp_F_or_C = tempFOrC;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Blinking Time Smile setting.
+ * @param blinkingTimeSmile True to enable blinking time smile, false to disable.
+ */
 void ATC_MiThermometer::setBlinkingTimeSmile(bool blinkingTimeSmile) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.blinking_time_smile = blinkingTimeSmile;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Comfort Smiley setting.
+ * @param comfortSmiley True to enable comfort smiley, false to disable.
+ */
 void ATC_MiThermometer::setComfortSmiley(bool comfortSmiley) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.comfort_smiley = comfortSmiley;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Adv Crypto setting.
+ * @param advCrypto True to enable Adv Crypto, false to disable.
+ */
 void ATC_MiThermometer::setAdvCrypto(bool advCrypto) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.adv_crypto = advCrypto;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Adv Flags setting.
+ * @param advFlags True to enable Adv Flags, false to disable.
+ */
 void ATC_MiThermometer::setAdvFlags(bool advFlags) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.adv_flags = advFlags;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Smiley setting.
+ * @param smiley The Smiley to set (as a Smiley enum).
+ */
 void ATC_MiThermometer::setSmiley(Smiley smiley) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.smiley = smiley;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the BT5 PHY setting.
+ * @param BT5PHY True to enable BT5 PHY, false to disable.
+ */
 void ATC_MiThermometer::setBT5PHY(bool BT5PHY) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.bt5phy = BT5PHY;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Long Range setting.
+ * @param longRange True to enable long range, false to disable.
+ */
 void ATC_MiThermometer::setLongRange(bool longRange) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.long_range = longRange;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the Screen Off setting.
+ * @param screenOff True to turn the screen off, false to turn it on.
+ */
 void ATC_MiThermometer::setScreenOff(bool screenOff) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.screen_off = screenOff;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the temperature offset.
+ * @param tempOffset The temperature offset to set.
+ */
 void ATC_MiThermometer::setTempOffset(float tempOffset) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.temp_offset = tempOffset;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the humidity offset.
+ * @param humidityOffset The humidity offset to set.
+ */
 void ATC_MiThermometer::setHumidityOffset(float humidityOffset) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.humidity_offset = humidityOffset;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the calibrated temperature offset.
+ * @param tempOffsetCal The calibrated temperature offset to set.
+ */
 void ATC_MiThermometer::setTempOffsetCal(int8_t tempOffsetCal) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.temp_offset_cal = tempOffsetCal;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the calibrated humidity offset.
+ * @param humidityOffsetCal The calibrated humidity offset to set.
+ */
 void ATC_MiThermometer::setHumidityOffsetCal(int8_t humidityOffsetCal) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.humidity_offset_cal = humidityOffsetCal;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the advertising interval in steps.
+ * @param advertisingIntervalSteps The advertising interval in steps to set.
+ */
 void ATC_MiThermometer::setAdvertisingIntervalSteps(uint8_t advertisingIntervalSteps) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.advertising_interval = advertisingIntervalSteps;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the advertising interval in milliseconds.
+ * @param advertisingIntervalMs The advertising interval in milliseconds to set.
+ */
 void ATC_MiThermometer::setAdvertisingIntervalMs(uint16_t advertisingIntervalMs) {
     setAdvertisingIntervalSteps(
             static_cast<uint8_t>(static_cast<float>(advertisingIntervalMs) / advertising_interval_step_time_ms));
 }
 
+/**
+ * @brief Sets the measure interval in milliseconds.
+ * @param measureIntervalMs The measure interval in milliseconds to set.
+ */
 void ATC_MiThermometer::setMeasureIntervalMs(uint32_t measureIntervalMs) {
     setMeasureIntervalSteps(static_cast<uint8_t>(measureIntervalMs / getAdvertisingIntervalMs()));
 }
 
+/**
+ * @brief Sets the measure interval in steps.
+ * @param measureIntervalSteps The measure interval in steps to set.
+ */
 void ATC_MiThermometer::setMeasureIntervalSteps(uint8_t measureIntervalSteps) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.measure_interval = measureIntervalSteps;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the connect latency in steps.
+ * @param connectLatencySteps The connect latency in steps to set.
+ */
 void ATC_MiThermometer::setConnectLatencySteps(uint8_t connectLatencySteps) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.connect_latency = connectLatencySteps;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the connect latency in milliseconds.
+ * @param connectLatencyMs The connect latency in milliseconds to set.
+ */
 void ATC_MiThermometer::setConnectLatencyMs(uint16_t connectLatencyMs) {
     setConnectLatencySteps(static_cast<uint8_t>(connectLatencyMs / connect_latency_step_time_ms));
 }
 
+/**
+ * @brief Sets the LCD update interval in steps.
+ * @param lcdUpdateIntervalSteps The LCD update interval in steps to set.
+ */
 void ATC_MiThermometer::setLcdUpdateIntervalSteps(uint8_t lcdUpdateIntervalSteps) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.lcd_update_interval = lcdUpdateIntervalSteps;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the LCD update interval in milliseconds.
+ * @param lcdUpdateIntervalMs The LCD update interval in milliseconds to set.
+ */
 void ATC_MiThermometer::setLcdUpdateIntervalMs(uint16_t lcdUpdateIntervalMs) {
     setLcdUpdateIntervalSteps(static_cast<uint8_t>(lcdUpdateIntervalMs / lcd_update_interval_step_time_ms));
 }
 
+/**
+ * @brief Sets the number of averaging measurements in steps.
+ * @param averagingMeasurementsSteps The number of averaging measurements in steps to set.
+ */
 void ATC_MiThermometer::setAveragingMeasurementsSteps(uint8_t averagingMeasurementsSteps) {
     ATC_MiThermometer_Settings newSettings = getSettings();
     newSettings.averaging_measurements = averagingMeasurementsSteps;
     sendSettings(newSettings);
 }
 
+/**
+ * @brief Sets the number of averaging measurements in milliseconds.
+ * @param averagingMeasurementsMs The number of averaging measurements in milliseconds to set.
+ */
 void ATC_MiThermometer::setAveragingMeasurementsMs(uint32_t averagingMeasurementsMs) {
     setAveragingMeasurementsSteps(static_cast<uint8_t>(averagingMeasurementsMs / getMeasureIntervalMs()));
 }
 
+/**
+ * @brief Sets the number of averaging measurements in seconds.
+ * @param averagingMeasurementsSec The number of averaging measurements in seconds to set.
+ */
 void ATC_MiThermometer::setAveragingMeasurementsSec(uint16_t averagingMeasurementsSec) {
     setAveragingMeasurementsMs(averagingMeasurementsSec * 1000);
 }
 
+/**
+ * @brief Resets the thermometer's settings to their default values.  Sends the reset command (0x56) to the device.
+ *        Resets the internal flags for read_settings and received_settings and then reads the settings again.
+ */
 void ATC_MiThermometer::resetSettings() {
-    std::vector<uint8_t> data = {0x56};
+    std::vector<uint8_t> data = {0x56}; // Reset settings command.
     sendCommand(data);
     read_settings = false;
     received_settings = false;
     readSettings();
 }
 
+/**
+ * @brief Sets the clock on the thermometer using a time_t value.  Connects to the device, sends the set clock command
+ * and the time data.  Prints error messages if connection or command sending fails.
+ * @param time  The time to set, as a time_t value.
+ */
 void ATC_MiThermometer::setClock(time_t time) {
     std::lock_guard<std::mutex> lock(bleMutex);
     int attempts = 0;
@@ -1316,7 +1795,7 @@ void ATC_MiThermometer::setClock(time_t time) {
         }
     }
     std::vector<uint8_t> data(5);
-    data[0] = 0x23;
+    data[0] = 0x23; // Set clock command
     data[1] = static_cast<uint8_t>(time & 0xFF);
     data[2] = static_cast<uint8_t>((time >> 8) & 0xFF);
     data[3] = static_cast<uint8_t>((time >> 16) & 0xFF);
@@ -1324,6 +1803,16 @@ void ATC_MiThermometer::setClock(time_t time) {
     sendCommand(data);
 }
 
+/**
+ * @brief Sets the clock on the thermometer. Converts the provided time components to a time_t value and calls the
+ * overloaded setClock function.
+ * @param hours The hour to set (0-23).
+ * @param minutes The minute to set (0-59).
+ * @param seconds The second to set (0-59).
+ * @param day The day of the month to set (1-31).
+ * @param month The month to set (1-12).
+ * @param year The year to set (e.g., 2024).
+ */
 void ATC_MiThermometer::setClock(uint8_t hours, uint8_t minutes, uint8_t seconds, uint8_t day, uint8_t month,
                                  uint16_t year) {
     tm timeStruct{};
@@ -1336,10 +1825,18 @@ void ATC_MiThermometer::setClock(uint8_t hours, uint8_t minutes, uint8_t seconds
     setClock(mktime(&timeStruct));
 }
 
+/**
+ * @brief Gets the current connection mode.
+ * @return The current connection mode as a Connection_mode enum.
+ */
 Connection_mode ATC_MiThermometer::getConnectionMode() const {
     return connection_mode;
 }
 
+/**
+ * @brief Sets the connection mode, managing connections, notifications, and data reads as needed.
+ * @param new_connection_mode The new connection mode to set.
+ */
 void ATC_MiThermometer::setConnectionMode(Connection_mode new_connection_mode) {
     if (connection_mode == new_connection_mode) {
         return;
@@ -1376,30 +1873,49 @@ void ATC_MiThermometer::setConnectionMode(Connection_mode new_connection_mode) {
     connection_mode = new_connection_mode;
 }
 
+/**
+ * @brief Stops temperature notifications. Unsubscribes from the temperature characteristic's notifications.
+ */
 void ATC_MiThermometer::stopNotifyTemp() {
     if (temperatureCharacteristic) {
         temperatureCharacteristic->unsubscribe();
+        started_notify_temp = false;
     }
 }
 
+/**
+ * @brief Stops precise temperature notifications. Unsubscribes from the precise temperature characteristic's notifications.
+ */
 void ATC_MiThermometer::stopNotifyTempPrecise() {
     if (temperaturePreciseCharacteristic) {
         temperaturePreciseCharacteristic->unsubscribe();
+        started_notify_temp_precise = false;
     }
 }
 
+/**
+ * @brief  Stops humidity notifications. Unsubscribes from the humidity characteristic's notifications.
+ */
 void ATC_MiThermometer::stopNotifyHumidity() {
     if (humidityCharacteristic) {
         humidityCharacteristic->unsubscribe();
+        started_notify_humidity = false;
     }
 }
 
+/**
+ * @brief Stops battery level notifications.  Unsubscribes from the battery level characteristic's notifications.
+ */
 void ATC_MiThermometer::stopNotifyBattery() {
     if (batteryCharacteristic) {
         batteryCharacteristic->unsubscribe();
+        started_notify_battery = false;
     }
 }
 
+/**
+ * @brief  Stops all notifications. Unsubscribes from all characteristic notifications.
+ */
 void ATC_MiThermometer::stopNotify() {
     stopNotifyTemp();
     stopNotifyTempPrecise();
@@ -1407,6 +1923,12 @@ void ATC_MiThermometer::stopNotify() {
     stopNotifyBattery();
 }
 
+/**
+ * @brief Reads the value of the specified characteristic and passes it to the callback function.
+ * Prints an error if the characteristic is null.
+ * @param characteristic A pointer to the characteristic to read.
+ * @param callback The function to call with the read value (as a string).
+ */
 void ATC_MiThermometer::readCharacteristicValue(NimBLERemoteCharacteristic *characteristic,
                                                 std::function<void(const std::string &)> callback) {
     if (!characteristic) {
