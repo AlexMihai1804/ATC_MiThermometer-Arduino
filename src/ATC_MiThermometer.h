@@ -34,6 +34,8 @@ public:
      */
     ATC_MiThermometer(const char *address, Connection_mode connection_mode = Connection_mode::ADVERTISING);
 
+    ATC_MiThermometer(std::string address, Connection_mode connection_mode = Connection_mode::ADVERTISING);
+
     /**
      * @brief Destructor for the ATC_MiThermometer class.
      */
@@ -208,6 +210,8 @@ public:
      * @return The MAC address.
      */
     const char *getAddress() const;
+
+    std::string getAddressString() const;
 
     /**
     * @brief returns if the settings have been read from the device

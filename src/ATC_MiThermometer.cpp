@@ -1984,3 +1984,11 @@ void ATC_MiThermometer::setTimeTracking(bool timeTracking) {
 time_t ATC_MiThermometer::getLastReadTime() const {
     return last_read_time;
 }
+
+ATC_MiThermometer::ATC_MiThermometer(std::string address, Connection_mode connection_mode) : ATC_MiThermometer(
+        address.c_str(), connection_mode) {
+}
+
+std::string ATC_MiThermometer::getAddressString() const {
+    return (std::string) address;
+}
