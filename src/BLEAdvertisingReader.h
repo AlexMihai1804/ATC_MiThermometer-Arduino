@@ -52,6 +52,9 @@ public:
      * @param thermometer A pointer to the ATC_MiThermometer to remove.
      */
     void operator-(ATC_MiThermometer *thermometer);
+
+    void initAllThermometers();
+
 private:
     NimBLEScan *pBLEScan; /**< Pointer to the NimBLE scan object. */
     std::vector<ATC_MiThermometer *> thermometers; /**< Vector of pointers to ATC_MiThermometer instances. */
@@ -74,8 +77,10 @@ private:
          * @param advertisedDevice A pointer to the received advertisement data.
          */
         void onResult(NimBLEAdvertisedDevice *advertisedDevice) override;
+
     private:
         BLEAdvertisingReader &parentReader; /**< Reference to the parent BLEAdvertisingReader instance. */
     };
 };
+
 #endif // BLE_ADVERTISING_READER_H

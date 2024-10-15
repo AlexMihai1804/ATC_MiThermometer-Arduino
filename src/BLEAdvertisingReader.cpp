@@ -67,6 +67,14 @@ void BLEAdvertisingReader::operator-(ATC_MiThermometer *thermometer) {
     removeThermometer(thermometer);
 }
 
+void BLEAdvertisingReader::initAllThermometers() {
+    for (ATC_MiThermometer *thermometer: thermometers) {
+        if (thermometer->getReadSettings())
+            continue;
+        thermometer->init();
+    }
+}
+
 /**
  * @brief Constructor for the AdvertisedDeviceCallbacks class.
  * Stores a reference to the parent BLEAdvertisingReader.
