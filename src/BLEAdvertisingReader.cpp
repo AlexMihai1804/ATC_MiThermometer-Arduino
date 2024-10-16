@@ -101,15 +101,12 @@ void BLEAdvertisingReader::AdvertisedDeviceCallbacks::onResult(NimBLEAdvertisedD
     for (ATC_MiThermometer *thermometer: parentReader.thermometers) {
         if (!thermometer)
             continue;
-
         std::string thermometerAddress = thermometer->getAddress();
-
         if (deviceAddress.length() != thermometerAddress.length()) {
             continue;
         }
         // Case-insensitive comparison of the addresses
-        if (std::equal(deviceAddress.begin(), deviceAddress.end(), thermometerAddress.begin(),
-                       [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+        if (strcasecmp(deviceAddress.c_str(), thermometerAddress.c_str()) == 0) {
             const uint8_t *payload = advertisedDevice->getPayload();
             size_t payloadLength = advertisedDevice->getPayloadLength();
             thermometer->parseAdvertisingData(payload, payloadLength);
