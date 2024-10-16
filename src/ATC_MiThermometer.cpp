@@ -51,7 +51,7 @@ void ATC_MiThermometer::connect() {
         }
         delay(1000);
     }
-    Serial.printf("Failed to connect to %s after 5 attempts\n", address);
+    Serial.printf("Failed to connect to %s after 5 attempts\n", address.c_str());
 }
 
 /**
@@ -715,7 +715,7 @@ Advertising_Type ATC_MiThermometer::getAdvertisingType() {
  * @return The MAC address.
  */
 const char *ATC_MiThermometer::getAddress() const {
-    return address;
+    return address.c_str();
 }
 
 /**
