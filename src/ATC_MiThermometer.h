@@ -627,7 +627,7 @@ public:
     time_t getLastReadTime() const;
 
 private:
-    const char *address; /**< The MAC address of the thermometer. */
+    std::string address; /**< The MAC address of the thermometer. */
     NimBLEClient *pClient; /**< Pointer to the BLE client. */
     NimBLERemoteService *environmentService; /**< Pointer to the environment service. */
     NimBLERemoteService *batteryService; /**< Pointer to the battery service. */
