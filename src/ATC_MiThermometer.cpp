@@ -122,7 +122,7 @@ void ATC_MiThermometer::beginNotifyTemp() {
 void ATC_MiThermometer::notifyTempCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
                                            size_t length, bool isNotify) {
     if (length >= 2) {
-        uint16_t temp = (pData[1] << 8) | pData[0];
+        int16_t temp = (pData[1] << 8) | pData[0];
         temperature = static_cast<float>(temp) / 10.0f;
         if (time_tracking) {
             last_read_time = time(nullptr);
@@ -183,7 +183,7 @@ void
 ATC_MiThermometer::notifyTempPreciseCallback(NimBLERemoteCharacteristic *pBLERemoteCharacteristic, const uint8_t *pData,
                                              size_t length, bool isNotify) {
     if (length >= 2) {
-        uint16_t temp = (pData[1] << 8) | pData[0];
+        int16_t temp = (pData[1] << 8) | pData[0];
         temperature_precise = static_cast<float>(temp) / 100.0f;
         if (time_tracking) {
             last_read_time = time(nullptr);
@@ -561,7 +561,7 @@ void ATC_MiThermometer::readTemperature() {
     }
     readCharacteristicValue(temperatureCharacteristic, [this](const std::string &value) {
         if (value.length() >= 2) {
-            uint16_t temp = (value[1] << 8) | value[0];
+            int16_t temp = (value[1] << 8) | value[0];
             temperature = static_cast<float>(temp) / 10.0f;
             if (time_tracking) {
                 last_read_time = time(nullptr);
@@ -607,7 +607,7 @@ void ATC_MiThermometer::readTemperaturePrecise() {
     }
     readCharacteristicValue(temperaturePreciseCharacteristic, [this](const std::string &value) {
         if (value.length() >= 2) {
-            uint16_t temp = (value[1] << 8) | value[0];
+            int16_t temp = (value[1] << 8) | value[0];
             temperature_precise = static_cast<float>(temp) / 100.0f;
             if (time_tracking) {
                 last_read_time = time(nullptr);
@@ -870,7 +870,7 @@ void ATC_MiThermometer::parseAdvertisingDataBTHOME(const uint8_t *data, size_t l
                             Serial.println("Missing data for Temperature!");
                             break;
                         }
-                        uint16_t temperatureRaw = ad_data[dataIndex] | (ad_data[dataIndex + 1] << 8);
+                        int16_t temperatureRaw = ad_data[dataIndex] | (ad_data[dataIndex + 1] << 8);
                         temperature_precise = static_cast<float>(temperatureRaw) * 0.01f;
                         dataIndex += 2;
                         break;
